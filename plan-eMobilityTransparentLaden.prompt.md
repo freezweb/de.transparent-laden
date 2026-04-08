@@ -39,6 +39,7 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - **SubscriptionService**: Abo-Lifecycle (erstellen, verlängern, kündigen)
 - **ProviderService**: Adapter-Factory, Charge-Point-Sync, Session-Relay
 - **PricingEngine**: Preisberechnung, Snapshot-Erstellung, Transparenz-Kalkulation
+- **TariffResolver**: StructuredTariff → ResolvedTariff Auflösung (zeitabhängig, gestaffelt)
 - **ChargingService**: Session-Lifecycle (Start, Stop, Status)
 - **BillingService**: Invoice-Erstellung, Lexware-Sync, PDF-Handling
 - **AdminService**: Dashboard-Daten, Nutzerverwaltung, Provider-Management
@@ -101,29 +102,41 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - **Index**: Spatial Index auf lat/lng für Geo-Queries
 
 ### connectors
-- id (PK), charge_point_id (FK→charge_points), external_id, connector_type [Type2|CCS|CHAdeMO|Schuko], power_kw (DECIMAL), status [available|occupied|charging|offline|unknown], tariff_data_json, last_status_update, created_at, updated_at
+- id (PK), charge_point_id (FK→charge_points), external_id, connector_type [Type2|CCS|CHAdeMO|Schuko], power_kw (DECIMAL), status [available|occupied|charging|offline|unknown], structured_tariff_json (StructuredTariff als JSON), last_status_update, created_at, updated_at
+- **structured_tariff_json**: Enthält alle Tarif-Elemente (Zeitabhängigkeit, Staffelung, Blockiergebühren) exakt wie vom Provider geliefert, nicht vereinfacht
 
 ### charging_sessions
-- id (PK), user_id (FK→users), connector_id (FK→connectors), provider_id (FK→providers), payment_method_id (FK→payment_methods), pricing_snapshot_id (FK→pricing_snapshots), external_session_id, status [pending|active|completed|failed|cancelled], started_at, ended_at, energy_kwh (DECIMAL 10,4), duration_seconds, total_price_cent, currency [EUR], created_at, updated_at
+- id (PK), user_id (FK→users), connector_id (FK→connectors), provider_id (FK→providers), payment_method_id (FK→payment_methods), pricing_snapshot_id (FK→pricing_snapshots), external_session_id, status [pending|active|completed|failed|cancelled], started_at, ended_at, energy_kwh (DECIMAL 10,4), duration_seconds, blocking_duration_seconds (INT, nullable – Zeit nach Ladeschluss bis Kabelabzug), total_price_cent, currency [EUR], created_at, updated_at
+- **blocking_duration_seconds**: Wird vom Provider gemeldet oder berechnet (ended_at bis cable_disconnected_at). Relevant für Blockiergebühren-Berechnung im Final Calculation
 
 ### pricing_snapshots ⚡ IMMUTABLE nach Erstellung
 - id (PK), session_id (FK→charging_sessions, nullable)
-- connector_id (FK), provider_id (FK), user_subscription_id (FK, nullable)
+- connector_id (FK), provider_id (FK), user_subscription_id (FK, nullable), payment_method_id (FK)
 - calculation_timestamp
-- **CPO-Komponente**: cpo_per_kwh_cent, cpo_per_min_cent, cpo_start_fee_cent
-- **Roaming-Komponente**: roaming_fee_type, roaming_fee_value
-- **Payment-Komponente**: payment_fee_fixed_cent, payment_fee_percentage
-- **Plattform-Komponente**: platform_fee_per_kwh_cent, platform_fee_base_percent, subscription_discount_percent, effective_platform_fee_percent
-- **Transparenz**: transparency_json (Prozentanteile aller Komponenten)
-- **Gesamt**: estimated_total_per_kwh_cent
+- **Tarif-Typ**: tariff_type [simple|time_based|tiered] – Komplexität des Quelltarifs
+- **Resolved Tarif (zum Zeitpunkt aufgelöst)**:
+  - resolved_per_kwh_cent, resolved_per_min_cent, resolved_start_fee_cent, resolved_blocking_fee_per_min_cent
+  - resolved_tariff_json (vollständiger ResolvedTariff als JSON für Nachvollziehbarkeit)
+- **Structured Tarif (Original-Rohdaten)**: structured_tariff_json (StructuredTariff vom Provider, exakte Kopie zum Snapshot-Zeitpunkt)
+- **Roaming-Komponente**: roaming_fee_type, roaming_fee_value, roaming_fee_calculated_cent
+- **Plattform-Komponente**: platform_fee_per_kwh_cent, platform_fee_base_percent, subscription_discount_percent, effective_platform_fee_percent, platform_fee_calculated_cent
+- **Payment-Komponente**: payment_fee_fixed_cent, payment_fee_percentage, payment_fee_min_cent, payment_fee_max_cent
+  - **Berechnung**: Payment-Fee wird ZULETZT auf den Gesamtbetrag (CPO + Roaming + Plattform) angewendet, nicht als Zwischenschritt
+- **Transparenz**: transparency_json (strukturierte Prozentanteile aller Komponenten)
+- **Geschätzte Gesamtwerte**: estimated_total_per_kwh_cent, estimated_total_30min_cent, estimated_total_60min_cent
 - tariff_version, created_at
 - **Kritisch**: Darf NIEMALS nach Erstellung geändert werden
+- **Neu**: Enthält sowohl den aufgelösten Tarif (für aktuelle Berechnung) als auch den Original-StructuredTariff (für Audit/Nachvollziehbarkeit)
 
 ### invoices
 - id (PK), user_id (FK→users), session_id (FK→charging_sessions, nullable – auch für Abo-Rechnungen), invoice_number (unique), invoice_type [charging|subscription], amount_net_cent, tax_percent, tax_amount_cent, amount_gross_cent, currency, lexware_invoice_id, lexware_status [pending|created|sent|paid|overdue|failed], pdf_path, retry_count, last_retry_at, created_at, synced_at
 
 ### admin_users (separate Tabelle, keine Vermischung mit Endkunden)
-- id (PK), email (unique), password_hash, display_name, role [super_admin|admin|viewer], last_login_at, created_at, updated_at
+- id (PK), email (unique), password_hash, display_name, role [super_admin|admin|viewer], status [invited|totp_pending|active|blocked], last_login_at, created_at, updated_at
+- **TOTP (Pflicht)**: totp_secret_encrypted, totp_status [not_setup|pending_verification|active], totp_verified_at, recovery_codes_encrypted (JSON-Array, gehashed)
+- **Einladungsflow**: invited_by (FK→admin_users, nullable), invitation_token_hash, invitation_expires_at
+- **Status-Machine**: invited (Einladungslink gesendet) → totp_pending (Passwort gesetzt, TOTP noch nicht eingerichtet) → active (TOTP verifiziert, voll einsatzfähig) → blocked (manuell gesperrt)
+- **Kritisch**: Kein Admin kann ohne aktives TOTP auf geschützte Endpunkte zugreifen. TOTP-Setup ist erzwungener Schritt nach erstem Login.
 
 ### audit_log (Write-only: nur Inserts, niemals Updates oder Deletes)
 - id (PK), entity_type, entity_id, action [create|update|delete|login|session_start|...], actor_type [user|admin|system], actor_id, changes_json (old/new), ip_address, created_at
@@ -148,22 +161,73 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - getCapabilities(): ProviderCapabilities
 - syncChargePoints(): SyncResult
 - getConnectorStatus(externalConnectorId): ConnectorStatus
-- getTariff(externalConnectorId): NormalizedTariff
+- getTariff(externalConnectorId): StructuredTariff
 - startSession(StartSessionRequest): ProviderSessionResponse
 - stopSession(externalSessionId): ProviderSessionResponse
 - getSessionStatus(externalSessionId): SessionStatusResponse
 ```
 
-### NormalizedTariff (Value Object)
+### StructuredTariff (Value Object – Rohdaten vom Provider)
+
+Bildet den vollständigen Tarif ab, wie er vom Provider kommt – inklusive Zeitabhängigkeiten und Staffelungen.
 
 ```
-- perKwhCent: int
-- perMinuteCent: int
-- startFeeCent: int
-- blockingFeePerMinuteCent: int (nach Ladeende)
-- currency: string (EUR)
-- validUntil: ?DateTime
+StructuredTariff:
+  elements: TariffElement[]      # Mehrere Elemente möglich (zeitabhängig)
+  currency: string (EUR)
+  validUntil: ?DateTime
+
+TariffElement:
+  restrictions: TariffRestrictions  # Wann gilt dieses Element
+  priceComponents: PriceComponent[] # Was kostet es
+
+TariffRestrictions:
+  startTime: ?string (HH:MM)       # z.B. "08:00"
+  endTime: ?string (HH:MM)         # z.B. "20:00"
+  dayOfWeek: ?int[]                 # 1=Mo..7=So, null=alle
+  minKwh: ?float                    # Staffelung: ab X kWh
+  maxKwh: ?float                    # Staffelung: bis X kWh
+  minDurationMinutes: ?int          # Ab X Minuten Ladedauer
+
+PriceComponent:
+  type: [ENERGY|TIME|FLAT|PARKING_TIME]  # OCPI-kompatibel
+  price: int (Cent)                       # Preis pro Einheit
+  stepSize: int                           # Schrittgröße (z.B. 1 kWh, 1 Min)
 ```
+
+### ResolvedTariff (Value Object – zum Zeitpunkt aufgelöst)
+
+Ergebnis der Auflösung eines StructuredTariff zum aktuellen Zeitpunkt. Einfach weiterverarbeitbar.
+
+```
+ResolvedTariff:
+  perKwhCent: int                   # Aufgelöster kWh-Preis
+  perMinuteCent: int                # Aufgelöster Minutenpreis
+  startFeeCent: int                 # Startgebühr
+  blockingFeePerMinuteCent: int     # Blockiergebühr nach Ladeende
+  currency: string (EUR)
+  resolvedAt: DateTime              # Zeitpunkt der Auflösung
+  appliedElementIndex: int          # Index des genutzten TariffElement
+  isTimeDependent: bool             # Hinweis: Tarif ist zeitabhängig
+  validUntil: ?DateTime             # Wie lange diese Auflösung gültig ist
+```
+
+### TariffResolver (Service)
+
+Löst einen StructuredTariff zu einem ResolvedTariff auf.
+
+```
+TariffResolver:
+  resolve(StructuredTariff, DateTime now): ResolvedTariff
+    1. Iteriert über elements[]
+    2. Prüft restrictions gegen aktuellen Zeitpunkt (Uhrzeit, Wochentag)
+    3. Wählt passendes Element (First-Match oder Most-Specific)
+    4. Extrahiert PriceComponents → mapped auf ResolvedTariff-Felder
+    5. Setzt validUntil auf nächste Tarifgrenzzeit (z.B. 20:00 wenn Nachttarif ab 20:00)
+    6. Bei keinem Match → Fallback auf Element ohne Restrictions oder Exception
+```
+
+**Datenfluss**: Provider.getTariff() → StructuredTariff → TariffResolver.resolve() → ResolvedTariff → PricingEngine
 
 ### Adapter-Implementierungen
 
@@ -208,61 +272,129 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 
 ### Berechnungslogik
 
-**Eingabe**: Connector, PaymentMethod, UserSubscription (nullable)
+**Eingabe**: Connector, PaymentMethod, UserSubscription (nullable), DateTime now
 
-**Schritt 1: Basis-Tarif (CPO)**
-- Tarif vom Provider-Adapter holen (normalisiert als NormalizedTariff)
-- Enthält: pro-kWh, pro-Minute, Startgebühr
+**Schritt 1: Tarif auflösen (StructuredTariff → ResolvedTariff)**
+- StructuredTariff vom Provider-Adapter holen (aus connectors.structured_tariff_json oder live)
+- TariffResolver.resolve(structuredTariff, now) → ResolvedTariff
+- Ergebnis: aufgelöster pro-kWh, pro-Minute, Startgebühr, Blockiergebühr
+- Bei zeitabhängigen Tarifen: validUntil zeigt an, wann sich der Tarif ändern könnte
 
 **Schritt 2: Roaming-Gebühr**
 - Aus Provider-Config: fest (z.B. 3ct/kWh) ODER prozentual (z.B. 5% auf CPO-Preis)
 - Aufschlag auf Basis-Tarif
 
-**Schritt 3: Payment-Gebühr**
-- Aus PaymentFeeModel der gewählten Zahlungsart
-- Berechnung: fixed_fee + (percentage × Zwischensumme)
-- Min/Max-Grenzen beachten
-
-**Schritt 4: Plattform-Gebühr**
+**Schritt 3: Plattform-Gebühr**
 - Basis-Plattformgebühr aus system_config (z.B. 5ct/kWh oder 8%)
 - MINUS Abo-Rabatt (z.B. Abo reduziert Plattformgebühr um 60%)
 - Ohne Abo: volle Plattformgebühr
 - Mit Abo: reduzierte Plattformgebühr (Hauptanreiz fürs Abo)
 
-**Schritt 5: Gesamtpreis**
-- Summe aller Komponenten = geschätzter Endpreis pro kWh
+**Schritt 4: Zwischensumme**
+- Subtotal = CPO (aufgelöst) + Roaming + Plattform
+- Dies ist der Betrag VOR Payment-Gebühren
 
-**Schritt 6: Transparenz-Kalkulation**
+**Schritt 5: Payment-Gebühr (ZULETZT)**
+- Aus PaymentFeeModel der gewählten Zahlungsart
+- Berechnung auf Subtotal: fixed_fee + (percentage × Subtotal)
+- Min/Max-Grenzen beachten (min_fee_cent, max_fee_cent)
+- **Wichtig**: Payment-Fee wird auf den GESAMTBETRAG angewendet, nicht als Zwischenschritt
+- Begründung: Zahlungsdienstleister berechnen Gebühren auf den Transaktionsbetrag
+
+**Schritt 6: Gesamtpreis**
+- Endpreis = Subtotal + Payment-Fee
+- Geschätzter Endpreis pro kWh (basierend auf erwarteter Ladedauer/Menge)
+- Zusätzlich: geschätzte Gesamtkosten für 30min und 60min Ladung
+
+**Schritt 7: Transparenz-Kalkulation**
 - Jede Komponente als Prozent vom Gesamtpreis:
   - Infrastruktur (CPO): X%
   - Roaming: Y%
-  - Zahlungsart: Z%
   - Plattform: W%
+  - Zahlungsart: Z%
   - Gesamt: 100%
-- Gespeichert als JSON im Snapshot
+- Bei zeitabhängigen Tarifen: Hinweis "Tarif gilt bis HH:MM, danach Tarif Y"
+- Gespeichert als strukturiertes JSON im Snapshot
 
 ### Snapshot-Speicherung
 - Alle Berechnungsparameter in `pricing_snapshots` gespeichert
 - IMMUTABLE: Kein UPDATE jemals erlaubt
-- Enthält alle Raten, damit Endbetrag reproduzierbar berechnet werden kann
+- Enthält: ResolvedTariff + Original-StructuredTariff + alle Zwischenberechnungen
 - Session verlinkt auf Snapshot via FK
+- Sowohl aufgelöste Raten (für Berechnung) als auch Rohdaten (für Audit)
 
-### Tarif-Normalisierung
-- Nur kWh-Preis → perKwhCent gesetzt, Rest 0
-- kWh + Zeit → beides gesetzt
-- Flat-Rate → umgerechnet auf geschätzte kWh (Connector-Power als Basis)
-- Komplexe Tarife (Zeitzonen) → zum aktuellen Zeitpunkt evaluiert
+### Tarif-Auflösung (TariffResolver)
+- **Simple Tarife** (1 Element, keine Restrictions): Direkte Übernahme → tariff_type=simple
+- **Zeitabhängige Tarife** (mehrere Elemente mit Zeitfenstern): Aktuelles Element wählen → tariff_type=time_based
+- **Gestaffelte Tarife** (abhängig von kWh/Dauer): Basierend auf Schätzung des Verbrauchs → tariff_type=tiered
+- **Flat-Rate**: Umgerechnet auf geschätzte kWh (Connector-Power als Basis)
+- **Fallback**: Kein passendes Element → Element ohne Restrictions nehmen oder Fehler
 
-### Preisanzeige für User
+### Preisanzeige für User (PricePreview)
 
 ```
 Geschätzter Preis: 42 ct/kWh
 
-Zusammensetzung:
-├── Infrastruktur (CPO): 68%
-├── Roaming-Netzwerk:     8%
-├── Zahlungsart (Visa):   4%
-└── Plattform:            20%  ← "Spare 12% mit Abo Premium"
+┌─────────────────────────────────────────────┐
+│ Preiszusammensetzung                        │
+│                                             │
+│  Infrastruktur (CPO)   28,6 ct/kWh   68%   │
+│  Roaming-Netzwerk       3,4 ct/kWh    8%   │
+│  Plattform              8,4 ct/kWh   20%   │
+│  Zahlungsart (Visa)     1,6 ct/kWh    4%   │
+│  ──────────────────────────────────         │
+│  Gesamt                42,0 ct/kWh  100%   │
+│                                             │
+│  ⚡ Geschätzte Kosten:                      │
+│     30 Min Ladung: ~11,80 €                 │
+│     60 Min Ladung: ~21,40 €                 │
+│                                             │
+│  💡 Spare 12% mit Abo Premium               │
+│     → Plattformgebühr: 8,4 → 3,4 ct/kWh   │
+│                                             │
+│  ⏰ Zeithinweis (bei zeitabh. Tarif):       │
+│     "Aktueller Tarif gilt bis 20:00.        │
+│      Ab 20:00: Nachttarif 35 ct/kWh"       │
+│                                             │
+│  ⚠️ Blockiergebühr nach Ladeende:           │
+│     5 ct/Min ab 15 Min nach Ladeschluss     │
+└─────────────────────────────────────────────┘
+```
+
+### PricePreview API-Response (POST /charging/calculate-price)
+
+```json
+{
+  "status": "success",
+  "data": {
+    "estimated_per_kwh_cent": 42,
+    "estimated_30min_cent": 1180,
+    "estimated_60min_cent": 2140,
+    "tariff_type": "time_based",
+    "is_time_dependent": true,
+    "current_tariff_valid_until": "2026-04-08T20:00:00+02:00",
+    "components": [
+      { "name": "cpo", "label": "Infrastruktur (CPO)", "per_kwh_cent": 286, "percent": 68.0 },
+      { "name": "roaming", "label": "Roaming-Netzwerk", "per_kwh_cent": 34, "percent": 8.0 },
+      { "name": "platform", "label": "Plattform", "per_kwh_cent": 84, "percent": 20.0 },
+      { "name": "payment", "label": "Zahlungsart (Visa)", "per_kwh_cent": 16, "percent": 4.0 }
+    ],
+    "blocking_fee": {
+      "per_minute_cent": 5,
+      "grace_period_minutes": 15
+    },
+    "subscription_hint": {
+      "potential_saving_percent": 12,
+      "platform_fee_with_sub_per_kwh_cent": 34,
+      "plan_name": "Premium"
+    },
+    "time_tariff_hint": {
+      "next_tariff_label": "Nachttarif",
+      "next_tariff_per_kwh_cent": 35,
+      "changes_at": "2026-04-08T20:00:00+02:00"
+    }
+  }
+}
 ```
 
 ---
@@ -381,11 +513,15 @@ Zusammensetzung:
 | GET | /api/v1/invoices/{id} | Rechnungsdetails |
 | GET | /api/v1/invoices/{id}/pdf | PDF herunterladen |
 
-### Admin Endpunkte (Admin-Auth)
+### Admin Endpunkte (Admin-Auth, zweistufig mit TOTP)
 
 | Method | Endpunkt | Beschreibung |
 |--------|----------|--------------|
-| POST | /api/v1/admin/auth/login | Admin-Login |
+| POST | /api/v1/admin/auth/login | Admin-Login Stufe 1: E-Mail + Passwort → temporäres pre-auth Token |
+| POST | /api/v1/admin/auth/totp-verify | Admin-Login Stufe 2: pre-auth Token + TOTP-Code → vollständiges JWT |
+| POST | /api/v1/admin/auth/totp-setup | TOTP einrichten (für Status totp_pending): generiert Secret + QR-URI |
+| POST | /api/v1/admin/auth/totp-confirm | TOTP-Setup bestätigen: überprüft Code, aktiviert TOTP, liefert Recovery-Codes |
+| POST | /api/v1/admin/auth/totp-recovery | Login mit Recovery-Code (statt TOTP) |
 | GET | /api/v1/admin/dashboard | Dashboard-Daten |
 | GET | /api/v1/admin/users | Nutzerliste |
 | GET | /api/v1/admin/users/{id} | Nutzer-Detail |
@@ -400,12 +536,41 @@ Zusammensetzung:
 | GET | /api/v1/admin/config | System-Konfiguration |
 | PUT | /api/v1/admin/config | Config aktualisieren |
 | GET | /api/v1/admin/audit-log | Audit-Log |
+| POST | /api/v1/admin/admins/invite | Neuen Admin einladen (nur super_admin) |
+| GET | /api/v1/admin/admins | Admin-Liste (nur super_admin) |
+| PUT | /api/v1/admin/admins/{id}/block | Admin sperren (nur super_admin) |
 
 ### Auth Flow
 - **Access Token**: JWT, 15 Minuten Laufzeit, enthält user_id + role
 - **Refresh Token**: Opaque Token (gehashed in DB), 30 Tage, Device-gebunden
 - **Flow**: Login → Access + Refresh → Bearer Header → bei Ablauf Refresh → neues Paar
 - **Admin**: Separater JWT-Claim (role: admin), separate User-Tabelle
+
+### Admin Auth Flow (Zweistufig mit TOTP)
+
+**Stufe 1 – Passwort-Prüfung:**
+1. POST /admin/auth/login mit {email, password}
+2. Passwort korrekt → temporäres `pre_auth_token` (JWT, 5 Min Laufzeit, Claim: `stage: "pre_auth"`)
+3. Passwort falsch → Rate-Limiting, Audit-Log
+4. Admin-Status `totp_pending` → Response enthält `requires_totp_setup: true` (Client leitet zum Setup)
+5. Admin-Status `blocked` → Login verweigert
+
+**Stufe 2a – TOTP-Verifizierung (normaler Login):**
+1. POST /admin/auth/totp-verify mit {pre_auth_token, totp_code}
+2. Code korrekt → vollständiges Admin-JWT (15 Min) + Refresh-Token
+3. Code falsch → max. 5 Versuche pro pre_auth_token, danach ungültig
+
+**Stufe 2b – TOTP-Ersteinrichtung (einmalig):**
+1. POST /admin/auth/totp-setup mit {pre_auth_token}
+2. Generiert TOTP-Secret (verschlüsselt gespeichert) + otpauth:// URI für QR-Code
+3. POST /admin/auth/totp-confirm mit {pre_auth_token, totp_code}
+4. Code korrekt → TOTP aktiviert, 10 Recovery-Codes generiert (einmalig angezeigt), Status → active
+5. Response enthält Recovery-Codes + vollständiges JWT
+
+**Recovery-Flow:**
+- POST /admin/auth/totp-recovery mit {pre_auth_token, recovery_code}
+- Recovery-Code einmalig gültig (nach Nutzung invalidiert)
+- Max. 10 Codes, danach Admin muss von super_admin entsperrt + TOTP zurückgesetzt werden
 
 ### Response-Struktur (einheitlich)
 
@@ -692,16 +857,18 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 
 1. Migration: users-Tabelle
 2. Migration: user_refresh_tokens-Tabelle
-3. Migration: admin_users-Tabelle
-4. UserModel, AdminUserModel
-5. JWT-Library erstellen (Token-Generierung, Validierung)
+3. Migration: admin_users-Tabelle (inkl. TOTP-Felder: totp_secret_encrypted, totp_status, recovery_codes_encrypted, Status-Machine)
+4. UserModel, AdminUserModel (mit Status-Machine-Logik: invited→totp_pending→active→blocked)
+5. JWT-Library erstellen (Token-Generierung, Validierung, pre_auth_token für Admin)
 6. JwtAuthFilter (CI4 Filter für geschützte Routen)
-7. AdminAuthFilter
+7. AdminAuthFilter (prüft TOTP-Status: nur active-Admins zugelassen)
 8. AuthController (register, login, refresh, logout, forgot-password, reset-password, verify-email)
-9. UserController (profile CRUD)
-10. Migration: audit_log-Tabelle
-11. AuditService
-12. Rate-Limit-Filter
+9. AdminAuthController (login Stufe 1, totp-verify Stufe 2, totp-setup, totp-confirm, totp-recovery)
+10. UserController (profile CRUD)
+11. Migration: audit_log-Tabelle
+12. AuditService
+13. Rate-Limit-Filter
+14. TOTP-Library (Secret-Generierung, Code-Validierung, Recovery-Code-Generierung)
 
 ### Phase 3: Subscriptions & Payment Methods
 **Abhängigkeiten**: Phase 2
@@ -724,35 +891,36 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 
 1. Migration: providers-Tabelle
 2. Migration: charge_points-Tabelle (mit Spatial Index)
-3. Migration: connectors-Tabelle
-4. ProviderAdapterInterface definieren
-5. NormalizedTariff Value Object
-6. ProviderCapabilities Value Object
-7. ProviderFactory
-8. MockProvider implementieren (mit JSON-Fixtures)
-9. ProviderModel, ChargePointModel, ConnectorModel
-10. ProviderSyncService
-11. CLI-Command: provider:sync
-12. ChargePointController (Suche, Details)
+3. Migration: connectors-Tabelle (mit structured_tariff_json)
+4. ProviderAdapterInterface definieren (getTariff liefert StructuredTariff)
+5. StructuredTariff Value Object (TariffElement, PriceComponent, TariffRestrictions)
+6. ResolvedTariff Value Object
+7. TariffResolver Service (resolve StructuredTariff → ResolvedTariff anhand DateTime)
+8. ProviderCapabilities Value Object
+9. ProviderFactory
+10. MockProvider implementieren (mit JSON-Fixtures inkl. zeitabhängiger Tarife)
+11. ProviderModel, ChargePointModel, ConnectorModel
+12. ProviderSyncService
+13. CLI-Command: provider:sync
+14. ChargePointController (Suche, Details)
 
 ### Phase 5: Pricing Engine
 **Abhängigkeiten**: Phase 3 + Phase 4
 
-1. Migration: pricing_snapshots-Tabelle
+1. Migration: pricing_snapshots-Tabelle (erweitert: structured_tariff_json, resolved_tariff_json, tariff_type, payment_method_id, Schätzwerte)
 2. Migration: system_config-Tabelle + Seed mit Default-Werten
 3. PricingSnapshotModel
 4. PricingEngine Service:
-   - calculateEstimate() → PricingResult
-   - createSnapshot() → PricingSnapshot (immutabel)
-   - calculateFinal() → Endbetrag in Cent
-   - calculateTransparency() → Prozentanteile
-5. TariffNormalizer
-6. PricingController (POST /charging/calculate-price)
+   - calculateEstimate(Connector, PaymentMethod, ?Subscription, DateTime) → PricingResult
+   - createSnapshot() → PricingSnapshot (immutabel, inkl. StructuredTariff + ResolvedTariff)
+   - calculateFinal(Snapshot, actuals) → Endbetrag in Cent (Payment-Fee zuletzt auf Gesamtbetrag)
+   - calculateTransparency() → strukturierte Prozentanteile
+5. PricingController (POST /charging/calculate-price → PricePreview-Response mit Komponenten, Schätzungen, Tarif-Hinweisen)
 
 ### Phase 6: Charging Sessions
 **Abhängigkeiten**: Phase 5
 
-1. Migration: charging_sessions-Tabelle
+1. Migration: charging_sessions-Tabelle (inkl. blocking_duration_seconds)
 2. ChargingSessionModel
 3. ChargingService:
    - startSession(): Session erstellen → Snapshot → Provider.startSession()
@@ -781,7 +949,7 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 ### Phase 8: Admin System
 **Abhängigkeiten**: Phase 7
 
-1. AdminAuthController (Login)
+1. AdminAuthController (Zweistufiger Login: Passwort → TOTP, Setup-Flow, Recovery)
 2. AdminDashboardController (Aggregierte Daten)
 3. AdminUserController (List, Detail, Block)
 4. AdminProviderController (CRUD, manueller Sync)
@@ -789,6 +957,7 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 6. AdminInvoiceController (List, Retry)
 7. AdminConfigController (System-Config CRUD)
 8. AdminAuditLogController (List, Filter)
+9. AdminAdminController (Einladung, Liste, Block – nur super_admin)
 
 ### Phase 9: Flutter App
 **Abhängigkeiten**: Phase 6 (API muss stabil sein)
@@ -831,13 +1000,17 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 | E8 | Kein eigenes Payment-Processing | PCI-DSS vermeiden, Komplexität reduzieren | Stripe – kann später ergänzt werden |
 | E9 | OCPI 2.2.1 als erstes Protokoll | De-facto-Standard EU, breite Provider-Unterstützung | OICP – als zweiter Adapter möglich |
 | E10 | Monolith statt Microservices | Einfacher für kleine Teamgröße zu entwickeln, deployen, debuggen | Microservices – Overhead nicht gerechtfertigt |
+| E11 | StructuredTariff + ResolvedTariff statt NormalizedTariff | Zwei-Schicht-Modell: Rohdaten vom Provider bleiben erhalten (Audit), aufgelöste Raten für Berechnung. Zeitabhängige/gestaffelte Tarife korrekt abbildbar | Einfacher NormalizedTariff – verliert Tarif-Komplexität |
+| E12 | Payment-Fee zuletzt auf Gesamtbetrag | Entspricht realer Gebührenberechnung der Zahlungsdienstleister (% auf Transaktionsbetrag) | Payment-Fee als Zwischenschritt – mathematisch falsch |
+| E13 | TOTP-Pflicht für alle Admins | Kein Admin-Zugang ohne 2FA, reduziert Angriffsfläche erheblich. Status-Machine erzwingt Setup | Optional TOTP – Sicherheitslücke bei nicht-aktivierten Admins |
+| E14 | TariffResolver als eigener Service | Trennung von Tarif-Auflösung (Provider-spezifisch) und Preiskalkulation (Business-Logik). Testbar, erweiterbar | Auflösung in PricingEngine – vermischt Verantwortlichkeiten |
 
 ---
 
 ## Verzeichnis-Konventionen (Backend)
 
 ```
-app/webserver/app/
+webserver/app/
 ├── Controllers/Api/V1/          # API Controller
 │   ├── AuthController.php
 │   ├── UserController.php
@@ -846,14 +1019,15 @@ app/webserver/app/
 │   ├── ChargePointController.php
 │   ├── InvoiceController.php
 │   └── Admin/                   # Admin API Controller
-│       ├── AdminAuthController.php
+│       ├── AdminAuthController.php  # Zweistufiger Login + TOTP-Setup
 │       ├── AdminDashboardController.php
 │       ├── AdminUserController.php
 │       ├── AdminProviderController.php
 │       ├── AdminSessionController.php
 │       ├── AdminInvoiceController.php
 │       ├── AdminConfigController.php
-│       └── AdminAuditLogController.php
+│       ├── AdminAuditLogController.php
+│       └── AdminAdminController.php    # Admin-Einladung, -Liste, -Block (super_admin)
 ├── Models/
 │   ├── UserModel.php
 │   ├── AdminUserModel.php
@@ -869,12 +1043,14 @@ app/webserver/app/
 │   ├── InvoiceModel.php
 │   └── AuditLogModel.php
 ├── Entities/
-│   ├── NormalizedTariff.php
+│   ├── StructuredTariff.php       # Rohdaten-Tarif vom Provider (TariffElement[], PriceComponent[], TariffRestrictions)
+│   ├── ResolvedTariff.php         # Zum Zeitpunkt aufgelöster Tarif (einfache Raten)
 │   ├── PricingResult.php
 │   └── ProviderCapabilities.php
 ├── Libraries/
 │   ├── Auth/
-│   │   └── JwtManager.php
+│   │   ├── JwtManager.php
+│   │   └── TotpManager.php        # TOTP Secret-Generierung, Code-Validierung, Recovery-Codes
 │   ├── Providers/
 │   │   ├── Contracts/
 │   │   │   └── ProviderAdapterInterface.php
@@ -882,10 +1058,10 @@ app/webserver/app/
 │   │   │   ├── MockProvider.php
 │   │   │   └── OcpiProvider.php
 │   │   ├── ProviderFactory.php
-│   │   └── ProviderSyncService.php
+│   │   ├── ProviderSyncService.php
+│   │   └── TariffResolver.php     # StructuredTariff → ResolvedTariff Auflösung
 │   ├── Pricing/
-│   │   ├── PricingEngine.php
-│   │   └── TariffNormalizer.php
+│   │   └── PricingEngine.php      # Nutzt TariffResolver, berechnet Payment-Fee zuletzt
 │   ├── Billing/
 │   │   ├── Contracts/
 │   │   │   └── LexwareAdapterInterface.php
