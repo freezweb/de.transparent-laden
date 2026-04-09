@@ -1,14 +1,14 @@
 <?php
 $title = 'Preise';
-$description = 'Transparent Laden – ein Tarif, 9,99 € pro Monat. Vollständige prozentuale Preisaufschlüsselung bei jedem Ladevorgang.';
+$description = 'Transparent Laden – ein Tarif (9,99 €/Monat), fester Aufschlag von 0,01 €/kWh. Alle Kosten sichtbar vor Ladebeginn.';
 ob_start();
 ?>
 
 <section class="py-16 bg-white">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-16">
-            <h1 class="text-4xl font-bold text-gray-900 mb-4">Ein Tarif. Volle Transparenz.</h1>
-            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Kein Freemium, keine Stufen. Ein Preis für die vollständige Preisaufschlüsselung bei jedem Ladevorgang.</p>
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">Ein Tarif. Ein fester Aufschlag. Volle Transparenz.</h1>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Kein Freemium, keine Stufen. Sie zahlen die Grundgebühr und wissen bei jedem Ladevorgang genau, was unser Aufschlag ist.</p>
         </div>
 
         <!-- Single plan -->
@@ -20,19 +20,19 @@ ob_start();
                 <ul class="space-y-3 mb-10 text-left max-w-sm mx-auto">
                     <li class="flex items-start">
                         <svg class="w-5 h-5 text-primary-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>Fester Aufschlag: 0,01&nbsp;&euro;/kWh, 0,01&nbsp;&euro;/Minute, 0,01&nbsp;&euro;/Minute Blockiergebühr</span>
+                    </li>
+                    <li class="flex items-start">
+                        <svg class="w-5 h-5 text-primary-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                         <span>Prozentuale Preisaufschlüsselung vor jedem Ladevorgang</span>
                     </li>
                     <li class="flex items-start">
                         <svg class="w-5 h-5 text-primary-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        <span>Sichtbare Marge – was wir verdienen, liegt offen</span>
+                        <span>Anbieter-Gebühren transparent weitergereicht</span>
                     </li>
                     <li class="flex items-start">
                         <svg class="w-5 h-5 text-primary-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        <span>Transparente Anzeige aller Betreiber-Gebühren (Start, Blockierung, Minutenpreis)</span>
-                    </li>
-                    <li class="flex items-start">
-                        <svg class="w-5 h-5 text-primary-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        <span>Zahlungsart-Kosten sichtbar vor Ladebeginn</span>
+                        <span>Zahlungsartenkosten sichtbar vor Ladebeginn</span>
                     </li>
                     <li class="flex items-start">
                         <svg class="w-5 h-5 text-primary-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
@@ -46,45 +46,36 @@ ob_start();
                         <svg class="w-5 h-5 text-primary-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                         <span>Ladepunkt-Karte mit Echtzeitverfügbarkeit</span>
                     </li>
-                    <li class="flex items-start">
-                        <svg class="w-5 h-5 text-primary-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        <span>Push-Benachrichtigungen zum Ladestatus</span>
-                    </li>
                 </ul>
                 <a href="/portal#/register" class="block bg-white text-primary-800 px-8 py-3 rounded-lg font-semibold hover:bg-primary-50 transition shadow-lg text-lg">Jetzt registrieren</a>
             </div>
         </div>
 
-        <!-- Additional info -->
+        <!-- Preisbeispiel -->
         <div class="mt-16 space-y-8">
             <div class="bg-gray-50 rounded-xl p-8">
                 <h2 class="text-2xl font-semibold text-gray-900 mb-4">Was kostet das Laden selbst?</h2>
-                <p class="text-gray-600 mb-4">Der kWh-Preis variiert je nach Ladestation und Betreiber. Der Endpreis setzt sich aus folgenden Bestandteilen zusammen:</p>
-                <div class="grid sm:grid-cols-2 gap-3 text-sm">
-                    <div class="flex items-center bg-white rounded-lg p-3 border">
-                        <span class="w-3 h-3 bg-primary-700 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700">Betreiber / Infrastruktur</span>
+                <p class="text-gray-600 mb-6">Der Endpreis setzt sich zusammen aus dem Anbieterpreis, unserem festen Aufschlag und den Zahlungsartenkosten:</p>
+
+                <div class="bg-white rounded-lg p-6 border mb-4">
+                    <h3 class="font-semibold text-gray-900 mb-4">Preisbeispiel</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between"><span class="text-gray-600">Anbieter-kWh-Preis</span><span class="font-semibold">0,45 &euro;</span></div>
+                        <div class="flex justify-between"><span class="text-gray-600">Unser fester Aufschlag</span><span class="font-semibold text-primary-700">+ 0,01 &euro;</span></div>
+                        <div class="flex justify-between"><span class="text-gray-600">Zahlungsart (PayPal, anteilig)</span><span class="font-semibold">+ 0,01 &euro;</span></div>
+                        <hr>
+                        <div class="flex justify-between font-bold text-primary-800"><span>Endpreis pro kWh</span><span>0,47 &euro;</span></div>
                     </div>
-                    <div class="flex items-center bg-white rounded-lg p-3 border">
-                        <span class="w-3 h-3 bg-primary-500 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700">Roaming / Betrieb</span>
-                    </div>
-                    <div class="flex items-center bg-white rounded-lg p-3 border">
-                        <span class="w-3 h-3 bg-accent-500 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700">Zahlungsabwicklung (abhängig von Ihrer Zahlungsart)</span>
-                    </div>
-                    <div class="flex items-center bg-white rounded-lg p-3 border">
-                        <span class="w-3 h-3 bg-green-500 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700">Unsere Marge (offen ausgewiesen)</span>
-                    </div>
-                    <div class="flex items-center bg-white rounded-lg p-3 border">
-                        <span class="w-3 h-3 bg-gray-400 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700">Steuern & Abgaben</span>
+                    <div class="mt-4 pt-4 border-t space-y-2 text-sm">
+                        <div class="flex justify-between"><span class="text-gray-500">Startgebühr (Betreiber)</span><span class="font-medium">1,00 &euro;</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500">Zahlungsart-Fixgebühr (PayPal)</span><span class="font-medium">0,35 &euro;</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500">Minutenpreis</span><span class="font-medium">keiner an dieser Station</span></div>
                     </div>
                 </div>
-                <p class="text-sm text-gray-500 mt-4">Dazu können je nach Betreiber Startgebühren, Blockiergebühren oder Minutenpreise anfallen. Alles wird Ihnen vor Ladebeginn angezeigt.</p>
+                <p class="text-sm text-gray-500">Anbieterpreise und Gebühren variieren je nach Ladestation. Unser Aufschlag bleibt immer 0,01&nbsp;&euro;. Alles wird vor Ladebeginn angezeigt.</p>
             </div>
 
+            <!-- FAQ -->
             <div class="bg-gray-50 rounded-xl p-8">
                 <h2 class="text-2xl font-semibold text-gray-900 mb-4">Häufige Fragen zum Preis</h2>
                 <div class="space-y-4">
@@ -93,12 +84,16 @@ ob_start();
                         <p class="text-gray-600 text-sm mt-1">Nein. Das Abo ist monatlich kündbar.</p>
                     </div>
                     <div>
+                        <h3 class="font-semibold text-gray-800">Was genau verdient ihr an einem Ladevorgang?</h3>
+                        <p class="text-gray-600 text-sm mt-1">Genau 0,01&nbsp;&euro; pro kWh. Falls der Anbieter einen Minutenpreis hat, zusätzlich 0,01&nbsp;&euro; pro Minute. Falls der Anbieter Blockiergebühren hat, zusätzlich 0,01&nbsp;&euro; pro Minute Blockiergebühr. Das ist unser festes Preisversprechen.</p>
+                    </div>
+                    <div>
                         <h3 class="font-semibold text-gray-800">Kommen weitere Kosten hinzu?</h3>
-                        <p class="text-gray-600 text-sm mt-1">Neben der Monatsgebühr zahlen Sie nur die tatsächlichen Ladekosten. Der Endpreis pro kWh enthält alle Bestandteile – aufgeschlüsselt in Prozent, damit Sie genau sehen, wohin Ihr Geld fließt.</p>
+                        <p class="text-gray-600 text-sm mt-1">Neben der Grundgebühr (9,99&nbsp;&euro;/Monat) zahlen Sie den Anbieterpreis plus unseren festen Aufschlag plus die Zahlungsartenkosten. Alles wird vor Ladebeginn aufgeschlüsselt angezeigt.</p>
                     </div>
                     <div>
                         <h3 class="font-semibold text-gray-800">Kann ich ohne Abo laden?</h3>
-                        <p class="text-gray-600 text-sm mt-1">Nein. Da die prozentuale Preistransparenz das Kernprodukt ist, gibt es keinen kostenlosen Tarif.</p>
+                        <p class="text-gray-600 text-sm mt-1">Nein. Die Preistransparenz mit festem Aufschlag ist das Kernprodukt und nur mit Abo verfügbar.</p>
                     </div>
                 </div>
             </div>

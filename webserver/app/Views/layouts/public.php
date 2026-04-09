@@ -80,7 +80,7 @@
                         </div>
                         <span class="text-lg font-bold text-white">Transparent Laden</span>
                     </div>
-                    <p class="text-sm">Vollständige Preistransparenz beim Laden von Elektrofahrzeugen – in Prozent, vor Ladebeginn.</p>
+                    <p class="text-sm">Immer nur 0,01&nbsp;&euro; Aufschlag pro kWh – volle Preistransparenz beim Laden von Elektrofahrzeugen.</p>
                 </div>
                 <div>
                     <h3 class="text-white font-semibold mb-3">Produkt</h3>

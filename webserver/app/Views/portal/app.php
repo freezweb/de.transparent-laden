@@ -349,19 +349,19 @@
                             <ul class="space-y-2 mb-6">
                                 <li class="text-sm text-gray-600 flex items-center gap-2">
                                     <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Fester Aufschlag: 0,01&nbsp;&euro;/kWh, 0,01&nbsp;&euro;/Minute, 0,01&nbsp;&euro;/Minute Blockiergebühr
+                                </li>
+                                <li class="text-sm text-gray-600 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                     Prozentuale Preisaufschlüsselung vor jedem Ladevorgang
                                 </li>
                                 <li class="text-sm text-gray-600 flex items-center gap-2">
                                     <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                    Marge offen ausgewiesen
+                                    Anbieter-Gebühren transparent durchgereicht
                                 </li>
                                 <li class="text-sm text-gray-600 flex items-center gap-2">
                                     <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                    Betreiber-Gebühren transparent angezeigt
-                                </li>
-                                <li class="text-sm text-gray-600 flex items-center gap-2">
-                                    <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                    Zahlungsart-Kosten sichtbar
+                                    Zahlungsartenkosten sichtbar vor Ladebeginn
                                 </li>
                                 <li class="text-sm text-gray-600 flex items-center gap-2">
                                     <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
