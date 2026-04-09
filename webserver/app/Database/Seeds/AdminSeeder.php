@@ -10,7 +10,7 @@ class AdminSeeder extends Seeder
     {
         $this->db->table('admin_users')->insert([
             'email'         => 'admin@einfach-laden.de',
-            'name'          => 'Super Admin',
+            'display_name'  => 'Super Admin',
             'password_hash' => password_hash('ChangeMeImmediately!2024', PASSWORD_ARGON2ID),
             'role'          => 'super_admin',
             'status'        => 'totp_pending',
