@@ -7,10 +7,10 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 ## 1. SYSTEMARCHITEKTUR
 
 ```
-┌─────────────┐     HTTPS/JWT      ┌──────────────────┐
-│ Flutter App  │◄──────────────────►│  CI4 REST API    │
-│ (Android/iOS)│                    │  (Backend)       │
-└─────────────┘                    └────────┬─────────┘
+┌─────────────┐     HTTPS/JWT      ┌──────────────────┐       ┌──────────────┐
+│ Flutter App  │◄──────────────────►│  CI4 REST API    │──────►│  FCM (Push)  │
+│ (Android/iOS)│◄───── Push ────────│  (Backend)       │       │  via HTTP v1 │
+└─────────────┘                    └────────┬─────────┘       └──────────────┘
                                             │
                     ┌───────────────────────┼───────────────────────┐
                     │                       │                       │
@@ -31,6 +31,9 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 | Charge-Point-Sync von Providern | Async (Cron, alle 10 Min) | Hintergrundprozess |
 | Invoice-Erstellung (Lexware) | Async (Cron/Queue) | Darf fehlschlagen + Retry |
 | PDF-Download von Lexware | Async (nach Invoice) | Nachgelagert |
+| Push-Nachrichten-Versand | Async (Event-driven) | Darf nicht Session-Flow blockieren |
+| Live-Kosten-Berechnung | Synchron (auf Polling-Request) | User erwartet aktuelle Daten |
+| Session-Event-Persistierung | Synchron (im Status-Update) | Muss vor Push-Dispatch geschrieben sein |
 
 ### Zentrale Services
 
@@ -43,6 +46,8 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - **ChargingService**: Session-Lifecycle (Start, Stop, Status)
 - **BillingService**: Invoice-Erstellung, Lexware-Sync, PDF-Handling
 - **AdminService**: Dashboard-Daten, Nutzerverwaltung, Provider-Management
+- **NotificationService**: Event-Dispatch, Push-Versand via FCM, Präferenzprüfung, Token-Management
+- **LiveCostService**: Live-Kostenschätzung aus Snapshot + aktuellem Session-Status, Foreground-Notification-Payload
 
 ---
 
@@ -58,6 +63,7 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 | **Pricing** | Preiskalkulation, Tarif-Normalisierung, Snapshot, Transparenz | Providers, Subscriptions, Users | Berechnet Preis → immutabler Snapshot → Charging + Billing |
 | **Billing** | Invoice-Erstellung, Lexware-Integration, PDF-Speicherung | Charging, Pricing, Users | Session-Ende → Invoice lokal → Lexware → PDF |
 | **Admin** | System-Config, User-Verwaltung, Provider-Mgmt, Dashboard | Alle (read-only Zugriff) | Liest aus allen Domänen, schreibt in Provider- und System-Config |
+| **Notifications** | Push-Versand, Geräte-Management, Nutzerpräferenzen, Event-Dispatch | Charging, Users, Pricing | Session-Events → Präferenzprüfung → Push an registrierte Geräte |
 
 **Kritischer Datenfluss:** Charging-Start → Pricing-Snapshot erstellen (immutabel) → Session aktiv → Session-Ende → Billing (Snapshot-Raten × Verbrauch) → Lexware → PDF
 
@@ -141,6 +147,40 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
   ]
   ```
 - **Verwendung**: BillingService generiert line_items aus Snapshot + Session-Actuals. LexwareAdapter mappt line_items auf Lexware-Rechnungspositionen.
+
+### user_devices
+- id (PK), user_id (FK→users), platform [android|ios], push_token (unique), device_name (nullable), app_version, notifications_enabled (BOOL, default true), is_active (BOOL, default true), last_seen_at, created_at, updated_at
+- **Push-Token**: FCM-Token, pro Gerät eindeutig. Wird bei App-Start und Token-Refresh aktualisiert.
+- **Multi-Device**: Ein User kann N Geräte haben. Push geht an ALLE aktiven Geräte mit notifications_enabled=true.
+- **Token-Invalidierung**: Wenn FCM HTTP v1 einen `UNREGISTERED`- oder `INVALID_ARGUMENT`-Fehler zurückgibt → is_active=false setzen.
+- **Cleanup**: Cron löscht Geräte mit last_seen_at > 90 Tage.
+- **Index**: (user_id, is_active) für schnellen Lookup aktiver Geräte eines Users.
+
+### notification_preferences
+- id (PK), user_id (FK→users), event_type (VARCHAR, z.B. `session_started`, `blocking_fee_warning`), enabled (BOOL, default true), created_at, updated_at
+- **Unique Constraint**: (user_id, event_type)
+- **Default-Verhalten**: Wenn kein Record für einen event_type existiert → enabled=true (Opt-out-Modell)
+- **Event-Types**:
+  - `session_started` – Ladevorgang gestartet
+  - `session_active` – Energiefluss bestätigt
+  - `session_paused` – Ladevorgang pausiert
+  - `session_completed` – Ladevorgang beendet (mit Endkosten)
+  - `session_failed` – Fehler an Station
+  - `session_live_cost` – Periodische Live-Kosten-Updates
+  - `blocking_fee_warning` – Blockiergebühr startet bald (5 Min vorher)
+  - `blocking_fee_active` – Blockiergebühr läuft
+  - `station_available` – Favorisierte Station wieder verfügbar
+  - `tariff_change_hint` – Tarifänderung während Session
+  - `invoice_ready` – Rechnung verfügbar
+
+### session_events
+- id (PK), session_id (FK→charging_sessions), event_type (VARCHAR), event_data_json (nullable), energy_kwh_at_event (DECIMAL 10,4, nullable), live_cost_cent (INT, nullable), created_at
+- **Zweck**: Persistiertes Protokoll aller relevanten Zustandsänderungen einer Session.
+- **event_type-Werte**: `started`, `active`, `energy_flowing`, `paused`, `resumed`, `stop_requested`, `completed`, `failed`, `cancelled`, `blocking_started`, `live_cost_update`
+- **event_data_json**: Kontextdaten je Typ, z.B. `{"kwh": 5.2, "duration_sec": 600, "provider_status": "Charging"}` oder `{"error_code": "EVSE_FAULT"}`
+- **Nicht jedes Event erzeugt Push**: Nur Events, die gemapped sind (siehe Notification-System Sektion) UND Nutzerpräferenz enabled.
+- **Write-only**: Wie audit_log – nur Inserts, keine Updates/Deletes.
+- **Index**: (session_id, created_at) für chronologisches Lesen.
 
 ### admin_users (separate Tabelle, keine Vermischung mit Endkunden)
 - id (PK), email (unique), password_hash, display_name, role [super_admin|admin|viewer], status [invited|totp_pending|active|blocked], last_login_at, created_at, updated_at
@@ -293,7 +333,8 @@ TariffResolver:
 ### Berechnungszeitpunkt
 1. **Pre-Start (Estimate)**: User sieht geschätzten Preis BEVOR er startet
 2. **Snapshot-Erstellung**: Beim Bestätigen des Ladevorgangs → alle Preiskomponenten eingefroren
-3. **Final Calculation**: Nach Session-Ende: Snapshot-Raten × tatsächlicher Verbrauch → Endbetrag
+3. **Live-Estimate**: Während laufender Session → Snapshot-Raten × bisheriger Verbrauch
+4. **Final Calculation**: Nach Session-Ende: Snapshot-Raten × tatsächlicher Verbrauch → Endbetrag
 
 ### Berechnungslogik
 
@@ -408,6 +449,47 @@ Schritt 6 – Endbetrag:
 - **Rundung**: Jeder Schritt wird einzeln auf ganzzahlige Cent gerundet (`round half up`).
 - **Alle Werte in Cent (Integer)** – keine Fließkomma-Zwischenergebnisse bei Geldbeträgen.
 - **Ergebnis**: `charging_sessions.total_price_cent = total_cent`
+
+### Transparenz-Begrifflichkeit (verbindlich)
+
+Drei klar getrennte Konzepte für Preisangaben im gesamten System:
+
+| Begriff | Phase | Berechnung | Anzeige | Verbindlichkeit |
+|---------|-------|------------|---------|------------------|
+| **preview_estimate** | Vor Session-Start | Snapshot-Raten × geschätzte kWh (30/60 Min) | PricePreview-Screen | Unverbindliche Schätzung |
+| **live_estimate** | Während Session | Snapshot-Raten × bisherige kWh/Minuten | Live-Session-Screen + Foreground Notification | Laufende Hochrechnung, „geschätzt“ |
+| **final_total** | Nach Session-Ende | Snapshot-Raten × finale kWh/Minuten (Final Calculation Formula) | Session-Detail + Rechnung | Endgültiger Rechnungsbetrag |
+
+- **UI-Kennzeichnung**: `preview_estimate` → „Geschätzter Preis“, `live_estimate` → „Aktuelle Kosten (geschätzt)“, `final_total` → „Endbetrag“
+- **API-Felder**: Alle Response-Felder verwenden das jeweilige Präfix, z.B. `live_estimate_total_cent`, `final_total_cent`
+- **Kein Float-Vergleich**: Live-Estimate und Final-Total können abweichen (wegen Rundung, Blocking-Fee etc.). User wird klar darauf hingewiesen.
+
+### Live-Kostenschätzung (Live-Estimate)
+
+Während einer aktiven Session wird der aktuelle Kostenstand auf Basis des immutablen Snapshots berechnet:
+
+**Eingabe**: pricing_snapshot + aktuelle Session-Daten (vom Provider-Status oder App-Polling)
+
+**Berechnung** (identisch zur Final Calculation, aber mit Zwischenstand-Werten):
+- `current_kwh` = letzte bekannte kWh vom Provider (oder lokale Schätzung)
+- `current_duration_sec` = now() - session.started_at
+- `blocking_sec` = 0 (während Ladung läuft keine Blockiergebühr)
+- Berechnung exakt wie Final Calculation Formula (Schritte 1–6), aber mit `current_kwh` / `current_duration_sec`
+
+**Datenquellen-Hierarchie**:
+1. **Provider-Status**: Wenn `getSessionStatus()` aktuelle kWh liefert → höchste Priorität
+2. **Schätzung auf Basis Connector-Leistung**: Wenn Provider keine kWh liefert → `estimated_kwh = connector_power_kw × (current_duration_sec / 3600)`
+3. **Dauer allein**: Wenn nur Zeitkomponente im Tarif → rein zeitbasierte Kosten
+
+**Kennzeichnung bei unvollständigen Daten**:
+- `data_source: "provider"` – kWh vom Provider bestätigt
+- `data_source: "estimated"` – kWh auf Basis Connector-Leistung geschätzt
+- App zeigt bei `estimated`: „Kosten basierend auf Schätzung – tatsächlicher Wert kann abweichen“
+
+**Aktualisierungsfrequenz**:
+- Backend berechnet Live-Estimate NICHT proaktiv, sondern auf API-Request (GET /charging/active/live-status)
+- App pollt alle 30 Sekunden (konfigurierbarer Riverpod-Timer)
+- Push-Benachrichtigungen mit Live-Kosten nur bei definierten Events (siehe MVP-Regeln)
 
 ### Tarif-Auflösung (TariffResolver)
 - **Simple Tarife** (1 Element, keine Restrictions): Direkte Übernahme → tariff_type=simple
@@ -537,6 +619,88 @@ Geschätzter Preis: 42 ct/kWh
 
 ---
 
+## 6a. PUSH & NOTIFICATION SYSTEM
+
+### Push-Infrastruktur
+
+**Technologie**: Firebase Cloud Messaging (FCM) HTTP v1 API
+- Einheitlich für Android + iOS
+- Backend sendet über FCM HTTP v1 (OAuth2 Service-Account, nicht Legacy-API)
+- Kein Firebase SDK im Backend – reiner REST-Client (CI4 CURLRequest)
+- Flutter-App nutzt `firebase_messaging` Package für Token-Empfang + Nachrichtenverarbeitung
+
+**NotificationService** (Backend, orchestriert):
+- Empfängt interne Events (Session-Status, Blocking-Warning, etc.)
+- Prüft Nutzerpräferenzen (notification_preferences)
+- Lädt aktive Geräte des Users (user_devices)
+- Baut plattform-spezifische Payloads (Android: data message, iOS: notification + data)
+- Sendet via FCM HTTP v1 an alle aktiven Geräte des Users
+- Persistiert Versandversuch + Ergebnis
+
+### Token-Lifecycle
+
+1. **Registrierung**: App startet → `firebase_messaging.getToken()` → POST /user/devices/register mit {platform, push_token, app_version, device_name}
+2. **Token-Refresh**: FCM kann Token jederzeit erneuern → `onTokenRefresh` Callback → PUT /user/devices/{id} mit neuem Token
+3. **App-Start**: Bei jedem App-Start `last_seen_at` aktualisieren + Token prüfen/erneuern
+4. **Logout**: App ruft DELETE /user/devices/{id} → Token gelöscht
+5. **Invalidierung**: FCM meldet `UNREGISTERED` → Backend setzt is_active=false
+6. **Cleanup**: Cron `php spark devices:cleanup` löscht Geräte mit last_seen_at > 90 Tage
+
+### Event → Push Mapping
+
+Events werden von Fachservices erzeugt und vom NotificationService in Push-Nachrichten umgewandelt:
+
+| Quelle | Event | Push-Typ | Payload |
+|--------|-------|----------|--------|
+| ChargingService | `session_started` | Einmalig | Status, Connector-Info, Tarifübersicht |
+| ChargingService (Status-Poll) | `session_active` (erster Energiefluss) | Einmalig | „Ladung aktiv“, erste kWh, Live-Kosten |
+| ChargingService (Status-Poll) | `session_paused` | Einmalig | Status, bisherige kWh + Kosten |
+| ChargingService | `session_completed` | Einmalig | Finale kWh, Dauer, **final_total** |
+| ChargingService | `session_failed` | Einmalig | Fehlergrund, Handlungsempfehlung |
+| LiveCostService | `session_live_cost` | Periodisch (MVP-Regeln) | Aktuelle kWh, Dauer, **live_estimate**, data_source |
+| ChargingService (Timer) | `blocking_fee_warning` | Einmalig | „Blockiergebühr startet in 5 Min“ |
+| ChargingService (Timer) | `blocking_fee_active` | Einmalig | „Blockiergebühr läuft“, aktueller Betrag |
+| ProviderSyncService | `station_available` | Einmalig | Station-Name, Connector-Status |
+| BillingService | `invoice_ready` | Einmalig | Rechnungsnummer, Betrag, PDF-Link |
+
+### Entkopplung Fachlogik ↔ Push-Versand
+
+**Ablauf**:
+1. Fachservice (z.B. ChargingService) schreibt `session_events`-Record
+2. Fachservice ruft `NotificationService::dispatch(userId, eventType, eventData)` auf
+3. NotificationService prüft `notification_preferences` für diesen User + event_type
+4. Wenn enabled: baut Payload, sendet an alle aktiven Geräte
+5. Wenn disabled: kein Push, aber session_event bleibt persistiert
+
+**Wichtig**: Session-Events werden IMMER geschrieben, unabhängig von Push-Präferenzen. Push ist ein Seiteneffekt, nicht die Primäraktion.
+
+### Push-Retry-Strategie
+
+- Erster Versuch: sofort (synchron im Request-Context)
+- FCM timeout oder 5xx → notification_queue-Eintrag (DB-Queue)
+- Cron: `php spark notifications:retry-pending` alle 2 Min
+- Max. 3 Retries mit Backoff: 2 Min, 10 Min, 30 Min
+- Nach 3 Fehlschlägen: verworfen (kein weiterer Retry – Push ist best-effort)
+- Bei `UNREGISTERED` / `INVALID_ARGUMENT`: kein Retry, Device deaktivieren
+
+### MVP-Regeln für Live-Kosten-Push
+
+Live-Kosten werden NICHT bei jedem Polling-Zyklus als Push gesendet. Stattdessen nur bei definierten Schwellen:
+
+| Trigger | Bedingung | Push-Inhalt |
+|---------|-----------|-------------|
+| Session-Start | Immer | Startzeitpunkt, Tarif, geschätzte Kosten |
+| Erster Energiefluss | energy_kwh > 0 erstmals | „Ladung aktiv“, erste kWh |
+| Kostensprung | live_estimate überschreitet nächste volle Euro-Schwelle (1€, 2€, 5€, 10€, 20€…) | Aktueller Betrag |
+| Periodisch | Alle 10 Minuten während aktiver Ladung | kWh, Dauer, live_estimate |
+| Blocking-Warnung | 5 Min vor grace_period_minutes-Ende | „Bitte Fahrzeug abstecken“ |
+| Blocking aktiv | Blocking-Fee läuft | Blockier-Kosten pro Minute |
+| Session-Ende | Immer | Finale kWh, Dauer, final_total |
+
+**Euro-Schwellen-Logik**: Backend trackt `last_push_cost_threshold_cent` pro Session. Wenn `live_estimate_total_cent >= last_threshold + schwelle` → Push + Threshold aktualisieren. Schwellen: 100, 200, 500, 1000, 2000 Cent (danach alle 2000).
+
+---
+
 ## 7. API DESIGN STRATEGIE
 
 ### Versionierung
@@ -568,6 +732,12 @@ Geschätzter Preis: 42 ct/kWh
 | DELETE | /api/v1/user/payment-methods/{id} | Zahlungsart entfernen |
 | PUT | /api/v1/user/payment-methods/{id}/default | Als Standard setzen |
 | GET | /api/v1/user/data-export | DSGVO Datenexport |
+| POST | /api/v1/user/devices/register | Push-Gerät registrieren (FCM-Token) |
+| PUT | /api/v1/user/devices/{id} | Push-Token aktualisieren |
+| DELETE | /api/v1/user/devices/{id} | Gerät abmelden (Logout) |
+| GET | /api/v1/user/devices | Registrierte Geräte listen |
+| GET | /api/v1/user/notification-preferences | Benachrichtigungspräferenzen abrufen |
+| PUT | /api/v1/user/notification-preferences | Präferenzen aktualisieren (Batch: Array von {event_type, enabled}) |
 
 ### Subscription Endpunkte (authentifiziert)
 
@@ -590,6 +760,7 @@ Geschätzter Preis: 42 ct/kWh
 | GET | /api/v1/charging/active | Aktive Session |
 | GET | /api/v1/charging/sessions | Session-Historie |
 | GET | /api/v1/charging/sessions/{id} | Session-Details |
+| GET | /api/v1/charging/active/live-status | Live-Status + Live-Kosten der aktiven Session |
 
 ### Billing Endpunkte (authentifiziert)
 
@@ -682,6 +853,47 @@ Geschätzter Preis: 42 ct/kWh
 
 **Error Codes**: VALIDATION_ERROR, AUTH_FAILED, TOKEN_EXPIRED, FORBIDDEN, NOT_FOUND, SESSION_ACTIVE, SESSION_NOT_FOUND, PROVIDER_ERROR, BILLING_ERROR, RATE_LIMITED, INTERNAL_ERROR
 
+### Live-Status API-Response (GET /charging/active/live-status)
+
+```json
+{
+  "status": "success",
+  "data": {
+    "session_id": 42,
+    "session_status": "active",
+    "started_at": "2026-04-09T14:22:00+02:00",
+    "duration_seconds": 1800,
+    "energy_kwh": 12.4,
+    "data_source": "provider",
+    "live_estimate": {
+      "total_cent": 521,
+      "label": "Aktuelle Kosten (geschätzt)",
+      "components": [
+        { "name": "cpo", "label": "Infrastruktur", "amount_cent": 355 },
+        { "name": "roaming", "label": "Roaming", "amount_cent": 42 },
+        { "name": "platform", "label": "Plattform", "amount_cent": 100 },
+        { "name": "payment", "label": "Zahlungsart", "amount_cent": 24 }
+      ]
+    },
+    "blocking_info": {
+      "is_blocking": false,
+      "grace_period_remaining_seconds": null,
+      "blocking_cost_cent": 0
+    },
+    "tariff_info": {
+      "tariff_type": "time_based",
+      "current_tariff_valid_until": "2026-04-09T20:00:00+02:00",
+      "hint": "Aktueller Tarif gilt bis 20:00"
+    },
+    "snapshot_id": 42
+  }
+}
+```
+
+- **Kein `final_total`-Feld**: Während aktiver Session gibt es nur `live_estimate`. `final_total` erscheint erst nach Session-Ende im Session-Detail.
+- **`data_source`**: Zeigt dem Client ob kWh vom Provider (`provider`) oder lokal geschätzt (`estimated`)
+- **Polling-Empfehlung**: App pollt alle 30 Sek. Header `X-Poll-Interval: 30` in Response für serverseitige Steuerung.
+
 ### CI4-Implementierungsstrategie
 - BaseApiController extends ResourceController mit ResponseTrait
 - API-Filter: JwtAuthFilter, AdminAuthFilter, RateLimitFilter, CorsFilter
@@ -731,7 +943,11 @@ lib/
 │   ├── charging/
 │   │   ├── data/
 │   │   ├── providers/
-│   │   └── presentation/     # Preis-Anzeige, Session-Steuerung
+│   │   └── presentation/     # Preis-Anzeige, Session-Steuerung, Live-Kosten-View
+│   ├── notifications/
+│   │   ├── data/              # Push-Token-Repository, Präferenz-Repository
+│   │   ├── providers/         # Push-Token-Provider, Präferenz-Provider
+│   │   └── presentation/     # Einstellungen-Screen für Benachrichtigungen
 │   ├── profile/
 │   │   ├── data/
 │   │   ├── providers/
@@ -760,12 +976,62 @@ lib/
 - **Models**: freezed + json_serializable
 - **Geolocation**: geolocator
 
+### Push-Notification-Integration (Flutter)
+
+**Package**: `firebase_messaging` + `flutter_local_notifications`
+
+**Initialisierung**:
+1. App-Start: `FirebaseMessaging.instance.getToken()` → POST /user/devices/register
+2. `FirebaseMessaging.onTokenRefresh` → PUT /user/devices/{id}
+3. Permission-Request: Bei erster Nutzung (iOS erfordert explizite Erlaubnis)
+
+**Nachrichtenverarbeitung**:
+- **Foreground**: `FirebaseMessaging.onMessage` → In-App-Overlay oder lokale Notification
+- **Background**: `FirebaseMessaging.onBackgroundMessage` → System-Notification via `flutter_local_notifications`
+- **Terminated**: System-Notification (FCM default), Tap öffnet App mit Deep-Link
+
+**Plattform-Unterschiede**:
+- **Android**: Data Message bevorzugt (volle Kontrolle über Darstellung). Foreground Service für laufende Session-Notification (persistent, nicht wegwischbar).
+- **iOS**: Notification + Data Message (iOS zeigt Data-only nicht im Background). Kein nativer Foreground Service – stattdessen periodische Push-Updates + lokale Timer-basierte Notification.
+
+### Laufende Session-Benachrichtigung (Foreground Notification)
+
+Während einer aktiven Session zeigt die App eine persistente Benachrichtigung:
+
+**Android** (Foreground Service):
+- Persistente Notification (nicht wegwischbar, während Session aktiv)
+- Aktualisiert sich alle 30 Sek (via Polling-Response oder Push)
+- Zeigt: Aktuelle Kosten, kWh, Dauer, Status
+- Tap → öffnet Live-Session-Screen
+- Endet automatisch bei Session-Completion/Failure
+
+**iOS** (Lokale Notification + Push):
+- Kein Foreground Service möglich → Kombination aus:
+  - Push-Nachrichten mit `content-available` für stille Updates
+  - LiveActivity (iOS 16.1+) für Dynamic-Island / Lock-Screen-Widget (Post-MVP)
+  - Lokale Notifications bei relevanten Events (Kostensprung, Blocking-Warnung)
+- Im Foreground: In-App-Banner mit Live-Daten (Riverpod-State, Polling-driven)
+
+**Notification-Inhalt** (Beispiel):
+```
+⚡ Ladung aktiv – 42 Min
+12,4 kWh • ~5,21 € (geschätzt)
+Infrastruktur 68% • Roaming 8% • Plattform 20% • Zahlung 4%
+```
+
+**Datenfluss App**:
+1. App pollt GET /charging/active/live-status alle 30 Sek
+2. Response aktualisiert Riverpod liveSessionProvider
+3. UI (Live-Session-Screen) und Foreground Notification lesen selben Provider
+4. Push-Nachrichten (falls App im Background) aktualisieren zusätzlich den lokalen State
+
 ### Offline / Caching Strategie
 - **Charge-Points**: Hive-Cache, Time-based Invalidation (5 Min), Map-Tiles offline via OSM
 - **User Profile + Subscription**: Hive-Cache, aktualisiert bei App-Start
 - **Session-Historie**: Lokale DB (Hive), Sync bei Verbindung
 - **Invoices**: Metadaten cached, PDFs on-demand heruntergeladen + lokal gespeichert
 - **Kein Offline-Start**: Ladung starten erfordert zwingend Online-Verbindung
+- **Live-Session-Daten**: Nicht gecached – immer live vom Server (Polling)
 
 ---
 
@@ -904,6 +1170,11 @@ lib/
 |---|--------|------------|
 | 8 | Alte App nutzt veraltete API | API v1 stabil halten, Breaking Changes nur in v2 |
 | 9 | DSGVO-Löschung vs. Aufbewahrungspflicht | Pseudonymisierung, Rechnungsdaten behalten |
+| 10 | FCM-Token ungültig / Push nicht zugestellt | Token-Invalidierung bei UNREGISTERED, Device-Cleanup-Cron, Push ist best-effort (kein geschäftskritischer Kanal) |
+| 11 | Live-Kosten weichen vom Endbetrag ab | Klare UI-Kennzeichnung „geschätzt“, unterschiedliche Begriffe (live_estimate vs. final_total), Abweichungshinweis nach Session-Ende |
+| 12 | Provider liefert keine Zwischen-kWh | Fallback auf Schätzung (Connector-Power), UI-Kennzeichnung `data_source: estimated` |
+| 13 | Zu viele Push-Nachrichten nerven Nutzer | Schwellen-basierte Logik (nicht jede Sekunde), konfigurierbare Präferenzen pro Event-Type, Opt-out möglich |
+| 14 | Android Foreground Service Batterieverbrauch | Polling-Intervall 30 Sek (nicht 1 Sek), Service endet automatisch bei Session-Ende |
 
 ---
 
@@ -1018,6 +1289,24 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 4. ChargingController (start, stop, active, sessions, session-detail)
 5. Cron-Command: charging:check-stale-sessions
 
+### Phase 6a: Push-Notifications & Live-Kosten
+**Abhängigkeiten**: Phase 6 + Phase 2 (user_devices benötigt users)
+
+1. Migration: user_devices-Tabelle
+2. Migration: notification_preferences-Tabelle
+3. Migration: session_events-Tabelle
+4. UserDeviceModel, NotificationPreferenceModel, SessionEventModel
+5. FCM-Client (CI4 CURLRequest → FCM HTTP v1, OAuth2 Service-Account)
+6. NotificationService (Event-Dispatch, Präferenzprüfung, Multi-Device-Versand, Token-Invalidierung)
+7. LiveCostService (Snapshot + aktuelle Session-Daten → live_estimate berechnen)
+8. DeviceController (register, update, delete, list)
+9. NotificationPreferenceController (get, update)
+10. LiveStatusController (GET /charging/active/live-status)
+11. ChargingService erweitern: Session-Events schreiben, NotificationService aufrufen
+12. Cron-Command: `php spark devices:cleanup` (inaktive Geräte > 90 Tage löschen)
+13. Cron-Command: `php spark notifications:retry-pending` (fehlgeschlagene Pushes)
+14. Blocking-Fee-Timer: `php spark charging:check-blocking-warnings` (Blocking-Warnung 5 Min vorher)
+
 ### Phase 7: Billing & Lexware
 **Abhängigkeiten**: Phase 6
 
@@ -1057,10 +1346,12 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 3. Auth-Feature: Login, Register, Forgot-Password
 4. Home-Feature: Map-View mit Charge-Points, Suche, Filter
 5. Charging-Feature: Preis-Vorschau (Transparenz), Session-Start/Stop, Live-Status
-6. Profile-Feature: Profil, Zahlungsarten
-7. Subscription-Feature: Plan-Übersicht, Abo-Abschluss, Kündigung
-8. Invoices-Feature: Rechnungsliste, PDF-Viewer
-9. Offline-Caching: Hive-Setup
+6. **Live-Session-Feature**: Live-Kosten-View, Foreground Service (Android), Polling-Timer, Push-Empfang
+7. **Push-Setup**: firebase_messaging Integration, Token-Registrierung, Präferenz-Screen
+8. Profile-Feature: Profil, Zahlungsarten, Benachrichtigungseinstellungen
+9. Subscription-Feature: Plan-Übersicht, Abo-Abschluss, Kündigung
+10. Invoices-Feature: Rechnungsliste, PDF-Viewer
+11. Offline-Caching: Hive-Setup
 
 ### Phase 10: CI/CD & Deployment
 **Inkrementell ab Phase 1**
@@ -1094,6 +1385,11 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 | E13 | TOTP-Pflicht für alle Admins | Kein Admin-Zugang ohne 2FA, reduziert Angriffsfläche erheblich. Status-Machine erzwingt Setup | Optional TOTP – Sicherheitslücke bei nicht-aktivierten Admins |
 | E14 | TariffResolver als eigener Service | Trennung von Tarif-Auflösung (Provider-spezifisch) und Preiskalkulation (Business-Logik). Testbar, erweiterbar | Auflösung in PricingEngine – vermischt Verantwortlichkeiten |
 | E15 | Snapshot-Tarif gilt für gesamte Session (MVP) | Vereinfacht Billing erheblich: ein Snapshot, ein Tarif, eine Berechnung. Zeitabhängige Tarifwechsel während laufender Session werden NICHT berücksichtigt. User wird VOR Start über zeitabhängigen Tarif informiert (PricePreview-Hinweis) | Pro-rata Berechnung bei Tarifwechsel – Komplexität für MVP nicht gerechtfertigt |
+| E16 | FCM HTTP v1 (nicht Legacy) | Zukunftssicher, OAuth2-basiert, Legacy-API wird von Google abgekündigt | FCM Legacy API – deprecation angekündigt |
+| E17 | Push ist best-effort, kein geschäftskritischer Kanal | Push kann fehlschlagen (Token ungültig, User hat Notifications deaktiviert). Session-Logik und Billing dürfen niemals von Push abhängen. Max. 3 Retries. | Garantierte Zustellung – nicht realistisch bei mobilen Push-Systemen |
+| E18 | Polling statt WebSocket für Live-Status (MVP) | Einfacher zu implementieren, keine zusätzliche Infrastruktur, 30-Sek-Intervall ausreichend für Transparenz | WebSocket – höhere Komplexität, Post-MVP evaluieren wenn sub-5s Updates nötig |
+| E19 | Euro-Schwellen für Live-Kosten-Push statt festes Intervall | Reduziert Push-Spam, relevanter für Nutzer ("Du hast gerade 5€ überschritten"), ergänzt durch 10-Min-Intervall | Festes Intervall (z.B. jede Minute) – zu viele irrelevante Pushes |
+| E20 | Drei-Begriffe-Modell (preview_estimate / live_estimate / final_total) | Klare semantische Trennung verhindert Verwirrung. Jeder Begriff hat definierte Phase, Berechnung und Verbindlichkeit | Einheitlicher "Preis"-Begriff – führt zu Beschwerden wenn Estimate ≠ Final |
 
 ---
 
@@ -1108,6 +1404,9 @@ webserver/app/
 │   ├── ChargingController.php
 │   ├── ChargePointController.php
 │   ├── InvoiceController.php
+│   ├── DeviceController.php             # Push-Geräte-Registrierung
+│   ├── NotificationPreferenceController.php
+│   ├── LiveStatusController.php          # GET /charging/active/live-status
 │   └── Admin/                   # Admin API Controller
 │       ├── AdminAuthController.php  # Zweistufiger Login + TOTP-Setup
 │       ├── AdminDashboardController.php
@@ -1131,6 +1430,9 @@ webserver/app/
 │   ├── ChargingSessionModel.php
 │   ├── PricingSnapshotModel.php
 │   ├── InvoiceModel.php
+│   ├── UserDeviceModel.php
+│   ├── NotificationPreferenceModel.php
+│   ├── SessionEventModel.php
 │   └── AuditLogModel.php
 ├── Entities/
 │   ├── StructuredTariff.php       # Rohdaten-Tarif vom Provider (TariffElement[], PriceComponent[], TariffRestrictions)
@@ -1164,6 +1466,8 @@ webserver/app/
 │       ├── UserService.php
 │       ├── SubscriptionService.php
 │       ├── ChargingService.php
+│       ├── NotificationService.php    # Event-Dispatch, FCM-Client, Token-Mgmt
+│       ├── LiveCostService.php        # Snapshot + Session-Daten → live_estimate
 │       └── AuditService.php
 ├── Filters/
 │   ├── JwtAuthFilter.php
@@ -1186,7 +1490,10 @@ webserver/app/
 │   │   ├── 013_CreateSystemConfigTable.php
 │   │   ├── 014_CreatePricingSnapshotsTable.php
 │   │   ├── 015_CreateChargingSessionsTable.php
-│   │   └── 016_CreateInvoicesTable.php
+│   │   ├── 016_CreateInvoicesTable.php
+│   │   ├── 017_CreateUserDevicesTable.php
+│   │   ├── 018_CreateNotificationPreferencesTable.php
+│   │   └── 019_CreateSessionEventsTable.php
 │   └── Seeds/
 │       ├── AdminSeeder.php
 │       ├── SubscriptionPlanSeeder.php
@@ -1199,6 +1506,9 @@ webserver/app/
 │   ├── BillingSubscriptionInvoices.php
 │   ├── ChargingCheckStaleSessions.php
 │   ├── SubscriptionCheckExpirations.php
+│   ├── DeviceCleanup.php                  # Inaktive Geräte > 90 Tage löschen
+│   ├── NotificationRetryPending.php        # Fehlgeschlagene Pushes wiederholen
+│   ├── ChargingCheckBlockingWarnings.php   # Blocking-Fee Vorwarnung
 │   └── UserHardDelete.php
 └── Helpers/
 ```
