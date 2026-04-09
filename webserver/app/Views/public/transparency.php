@@ -8,8 +8,8 @@ ob_start();
 <section class="py-16 bg-white">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 class="text-4xl font-bold text-gray-900 mb-6">So funktioniert Transparent Laden</h1>
-        <p class="text-lg text-gray-600 mb-4">Andere Lade-Apps zeigen Ihnen einen Endpreis. Wir zeigen Ihnen, <strong>woraus dieser Preis besteht</strong>: was der Anbieter verlangt, was wir aufschlagen und was Ihre Zahlungsart kostet.</p>
-        <p class="text-gray-600 mb-12">Unser Aufschlag ist dabei immer gleich. Das ist unser festes Preisversprechen.</p>
+        <p class="text-lg text-gray-600 mb-4">Andere Lade-Apps zeigen Ihnen einen Endpreis. Wir zeigen Ihnen, <strong>woraus dieser Preis besteht</strong> – aufgeschlüsselt nach den beteiligten Bereichen: Betreiber&nbsp;/ Infrastruktur, Roaming&nbsp;/ Betrieb, Zahlungsabwicklung und unsere Marge. Jeder Bereich wird mit seinem prozentualen Anteil sichtbar gemacht.</p>
+        <p class="text-gray-600 mb-12">Unser Aufschlag ist dabei immer gleich. Das ist unser festes Preisversprechen. Die prozentuale Verteilung variiert von Ladestation zu Ladestation – und genau das machen wir transparent.</p>
 
         <div class="space-y-12">
             <!-- Unser festes Aufschlagsmodell -->
@@ -39,60 +39,74 @@ ob_start();
             <!-- Preis-Zusammensetzung Beispiel -->
             <div class="bg-gray-50 rounded-xl p-8">
                 <h2 class="text-2xl font-semibold text-gray-900 mb-4">So setzt sich Ihr Ladepreis zusammen</h2>
-                <p class="text-gray-600 mb-6">Vor Ladebeginn sehen Sie den Endpreis <strong>und</strong> die Aufschlüsselung – sowohl in Cent als auch in Prozent:</p>
+                <p class="text-gray-600 mb-6">Vor Ladebeginn sehen Sie den Endpreis <strong>und</strong> die Aufschlüsselung – sowohl in Cent als auch in Prozent nach den beteiligten Bereichen:</p>
 
                 <div class="bg-white rounded-lg p-6 border mb-4">
                     <h3 class="font-semibold text-gray-900 mb-4">Preisbeispiel: AC-Ladestation, 22 kW</h3>
                     <div class="space-y-3 text-sm">
-                        <div class="flex justify-between items-center"><span class="text-gray-600">Anbieter-kWh-Preis</span><span class="font-semibold">0,45 &euro;</span><span class="text-gray-400 text-xs w-16 text-right">~ 90 %</span></div>
-                        <div class="flex justify-between items-center"><span class="text-gray-600">Unser Aufschlag (fest)</span><span class="font-semibold text-primary-700">0,01 &euro;</span><span class="text-gray-400 text-xs w-16 text-right">~ 2 %</span></div>
-                        <div class="flex justify-between items-center"><span class="text-gray-600">Zahlungsart-Anteil (variabel)</span><span class="font-semibold">0,01 &euro;</span><span class="text-gray-400 text-xs w-16 text-right">~ 2 %</span></div>
-                        <div class="flex justify-between items-center"><span class="text-gray-600">MwSt. (im Anbieterpreis enthalten)</span><span class="font-semibold">incl.</span><span class="text-gray-400 text-xs w-16 text-right"></span></div>
+                        <div class="flex justify-between items-center"><span class="text-gray-600">Betreiber / Infrastruktur</span><span class="font-semibold">0,33 &euro;</span><span class="text-gray-400 text-xs w-16 text-right">~ 70 %</span></div>
+                        <div class="flex justify-between items-center"><span class="text-gray-600">Roaming / Betrieb</span><span class="font-semibold">0,12 &euro;</span><span class="text-gray-400 text-xs w-16 text-right">~ 26 %</span></div>
+                        <div class="flex justify-between items-center"><span class="text-gray-600">Zahlungsabwicklung</span><span class="font-semibold">0,01 &euro;</span><span class="text-gray-400 text-xs w-16 text-right">~ 2 %</span></div>
+                        <div class="flex justify-between items-center"><span class="text-gray-600">Unsere Marge (fester Aufschlag)</span><span class="font-semibold text-primary-700">0,01 &euro;</span><span class="text-gray-400 text-xs w-16 text-right">~ 2 %</span></div>
                         <hr>
                         <div class="flex justify-between items-center font-bold text-primary-800"><span>Endpreis pro kWh</span><span>0,47 &euro;</span><span class="text-xs w-16 text-right">100 %</span></div>
+                    </div>
+                    <!-- Prozentbalken -->
+                    <div class="mt-4 flex h-5 rounded-full overflow-hidden">
+                        <div class="bg-primary-800" style="width:70%" title="Betreiber / Infrastruktur"></div>
+                        <div class="bg-primary-500" style="width:26%" title="Roaming / Betrieb"></div>
+                        <div class="bg-accent-500" style="width:2%" title="Zahlungsabwicklung"></div>
+                        <div class="bg-green-500" style="width:2%" title="Unsere Marge"></div>
+                    </div>
+                    <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-1 text-xs text-gray-500">
+                        <span><span class="inline-block w-2 h-2 rounded-full bg-primary-800 mr-1"></span>Betreiber</span>
+                        <span><span class="inline-block w-2 h-2 rounded-full bg-primary-500 mr-1"></span>Roaming</span>
+                        <span><span class="inline-block w-2 h-2 rounded-full bg-accent-500 mr-1"></span>Zahlung</span>
+                        <span><span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span>Marge</span>
                     </div>
                     <div class="mt-4 pt-4 border-t space-y-2 text-sm">
                         <div class="flex justify-between"><span class="text-gray-500">Startgebühr (Betreiber)</span><span class="font-medium">1,00 &euro;</span></div>
                         <div class="flex justify-between"><span class="text-gray-500">Zahlungsart-Fixgebühr (PayPal)</span><span class="font-medium">0,35 &euro;</span></div>
                     </div>
                 </div>
-                <p class="text-sm text-gray-500">* Beispielhafte Darstellung. Anbieterpreise, Gebühren und Zahlungsartenkosten variieren je nach Ladestation und Zahlungsart.</p>
+                <p class="text-sm text-gray-500">* Beispielhafte Darstellung. Anteile variieren je nach Ladestation, Anbieter und Zahlungsart. Die tatsächliche Aufteilung wird ladespezifisch berechnet und vor Ladebeginn angezeigt.</p>
             </div>
 
-            <!-- Was der Anbieter definiert -->
+            <!-- Was der Anbieter definiert + Roaming/Betrieb -->
             <div class="bg-gray-50 rounded-xl p-8">
-                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Was der Anbieter definiert</h2>
-                <p class="text-gray-600 mb-6">Der Ladestationsbetreiber legt die Basispreise fest. Wir reichen diese transparent an Sie weiter:</p>
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Woher kommen die Preisbestandteile?</h2>
+                <p class="text-gray-600 mb-6">Der Endpreis besteht aus mehreren Bereichen. Wir machen jeden einzelnen sichtbar:</p>
                 <ul class="space-y-4">
                     <li class="flex items-start">
-                        <svg class="w-6 h-6 text-primary-600 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span class="w-6 h-6 rounded-full bg-primary-800 flex-shrink-0 mt-0.5 mr-3"></span>
                         <div>
-                            <strong class="text-gray-900">kWh-Preis</strong>
-                            <p class="text-gray-600 text-sm mt-1">Der Grundpreis pro Kilowattstunde. Darauf kommt unser fester Aufschlag von 0,01&nbsp;&euro;.</p>
+                            <strong class="text-gray-900">Betreiber / Infrastruktur</strong>
+                            <p class="text-gray-600 text-sm mt-1">Der Anteil, den der Ladestationsbetreiber für Strom, Infrastruktur und Betrieb der Station erhält. Dieser variiert je nach Betreiber und Standort.</p>
                         </div>
                     </li>
                     <li class="flex items-start">
-                        <svg class="w-6 h-6 text-primary-600 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span class="w-6 h-6 rounded-full bg-primary-500 flex-shrink-0 mt-0.5 mr-3"></span>
                         <div>
-                            <strong class="text-gray-900">Minutenpreis (falls vorhanden)</strong>
-                            <p class="text-gray-600 text-sm mt-1">Einige Anbieter berechnen einen Preis pro Minute Ladezeit. Darauf kommt unser Aufschlag von 0,01&nbsp;&euro;/Minute.</p>
+                            <strong class="text-gray-900">Roaming / Betrieb</strong>
+                            <p class="text-gray-600 text-sm mt-1">Kosten für die Roaming-Anbindung und den laufenden Betrieb des Ladenetzwerks. Ermöglicht Ihnen den Zugang zu Stationen verschiedener Betreiber über eine einzige App.</p>
                         </div>
                     </li>
                     <li class="flex items-start">
-                        <svg class="w-6 h-6 text-primary-600 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span class="w-6 h-6 rounded-full bg-accent-500 flex-shrink-0 mt-0.5 mr-3"></span>
                         <div>
-                            <strong class="text-gray-900">Startgebühr (falls vorhanden)</strong>
-                            <p class="text-gray-600 text-sm mt-1">Eine einmalige Gebühr pro Ladevorgang, vom Betreiber festgelegt. Wird Ihnen separat angezeigt und 1:1 weitergereicht.</p>
+                            <strong class="text-gray-900">Zahlungsabwicklung</strong>
+                            <p class="text-gray-600 text-sm mt-1">Transaktionskosten Ihrer gewählten Zahlungsart (z.&nbsp;B. PayPal, Kreditkarte). Aufgeteilt in fixen und prozentualen Anteil – beides wird separat sichtbar gemacht.</p>
                         </div>
                     </li>
                     <li class="flex items-start">
-                        <svg class="w-6 h-6 text-primary-600 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span class="w-6 h-6 rounded-full bg-green-500 flex-shrink-0 mt-0.5 mr-3"></span>
                         <div>
-                            <strong class="text-gray-900">Blockiergebühr (falls vorhanden)</strong>
-                            <p class="text-gray-600 text-sm mt-1">Kosten pro Minute, wenn das Fahrzeug nach Ladeschluss den Platz belegt. Darauf kommt unser Aufschlag von 0,01&nbsp;&euro;/Minute.</p>
+                            <strong class="text-gray-900">Unsere Marge</strong>
+                            <p class="text-gray-600 text-sm mt-1">Fest 0,01&nbsp;&euro;/kWh. Bei Minutenpreisen 0,01&nbsp;&euro;/Minute. Bei Blockiergebühren 0,01&nbsp;&euro;/Minute. Unser festes Preisversprechen.</p>
                         </div>
                     </li>
                 </ul>
+                <p class="text-sm text-gray-500 mt-6">Zusätzlich zeigen wir providerseitige Zusatzkosten wie Startgebühren und Blockiergebühren als separate Positionen an.</p>
             </div>
 
             <!-- Zahlungsart -->
@@ -122,27 +136,27 @@ ob_start();
 
             <!-- Prozentuale Aufschlüsselung -->
             <div class="bg-gray-50 rounded-xl p-8">
-                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Prozentuale Transparenz</h2>
-                <p class="text-gray-600 mb-4">Zusätzlich zum festen Aufschlag zeigen wir Ihnen die <strong>prozentuale Zusammensetzung</strong> des Endpreises. Sie sehen auf einen Blick:</p>
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Prozentuale Partner-Aufteilung</h2>
+                <p class="text-gray-600 mb-4">Zusätzlich zum festen Aufschlag zeigen wir Ihnen die <strong>prozentuale Verteilung</strong> des Endpreises auf die beteiligten Bereiche. Sie sehen auf einen Blick:</p>
                 <div class="grid sm:grid-cols-2 gap-3 mb-4">
                     <div class="flex items-center bg-white rounded-lg p-3 border">
-                        <span class="w-3 h-3 bg-primary-700 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700 text-sm">Wie viel % an den Anbieter gehen</span>
+                        <span class="w-3 h-3 bg-primary-800 rounded-full mr-3 flex-shrink-0"></span>
+                        <span class="text-gray-700 text-sm">Betreiber / Infrastruktur: wie viel % an den Stationsbetreiber gehen</span>
                     </div>
                     <div class="flex items-center bg-white rounded-lg p-3 border">
                         <span class="w-3 h-3 bg-primary-500 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700 text-sm">Wie viel % unser Aufschlag ausmacht</span>
+                        <span class="text-gray-700 text-sm">Roaming / Betrieb: wie viel % für Netzanbindung und Betrieb anfallen</span>
                     </div>
                     <div class="flex items-center bg-white rounded-lg p-3 border">
                         <span class="w-3 h-3 bg-accent-500 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700 text-sm">Wie viel % die Zahlungsart kostet</span>
+                        <span class="text-gray-700 text-sm">Zahlungsabwicklung: wie viel % Ihre Zahlungsart verursacht</span>
                     </div>
                     <div class="flex items-center bg-white rounded-lg p-3 border">
-                        <span class="w-3 h-3 bg-gray-400 rounded-full mr-3 flex-shrink-0"></span>
-                        <span class="text-gray-700 text-sm">Wie viel % Steuern enthalten sind</span>
+                        <span class="w-3 h-3 bg-green-500 rounded-full mr-3 flex-shrink-0"></span>
+                        <span class="text-gray-700 text-sm">Unsere Marge: wie viel % unser fester Aufschlag ausmacht</span>
                     </div>
                 </div>
-                <p class="text-sm text-gray-600">So kennen Sie nicht nur den Endpreis, sondern verstehen auch, wer wie viel bekommt.</p>
+                <p class="text-sm text-gray-600">Diese Verteilung ist <strong>dynamisch</strong> – sie wird für jeden Ladevorgang individuell berechnet und hängt vom jeweiligen Anbieter, der Ladestation und Ihrer Zahlungsart ab. So kennen Sie nicht nur den Endpreis, sondern verstehen auch, wer wie viel bekommt.</p>
             </div>
 
             <!-- Grundgebühr / wirtschaftliches Modell -->

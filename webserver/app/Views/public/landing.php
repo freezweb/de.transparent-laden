@@ -16,7 +16,7 @@ ob_start();
                     Immer nur <span class="text-primary-200">1&nbsp;Cent</span> Aufschlag pro&nbsp;kWh
                 </h1>
                 <p class="text-lg md:text-xl text-primary-100 mb-8 leading-relaxed">
-                    Unser Preisversprechen ist einfach: Wir schlagen auf den Anbieterpreis genau <strong>0,01&nbsp;&euro; pro&nbsp;kWh</strong> auf. Bei Minutenpreisen und Blockiergebühren jeweils <strong>0,01&nbsp;&euro; pro&nbsp;Minute</strong>. Dazu sehen Sie vor Ladebeginn die prozentuale Zusammensetzung und die Zahlungsartenkosten. Alles offen, alles nachvollziehbar.
+                    Unser Preisversprechen ist einfach: Wir schlagen auf den Anbieterpreis genau <strong>0,01&nbsp;&euro; pro&nbsp;kWh</strong> auf. Bei Minutenpreisen und Blockiergebühren jeweils <strong>0,01&nbsp;&euro; pro&nbsp;Minute</strong>. Dazu sehen Sie vor Ladebeginn, wie sich Ihr Ladepreis prozentual auf die beteiligten Bereiche verteilt: <strong>Betreiber&nbsp;/ Infrastruktur</strong>, <strong>Roaming&nbsp;/ Betrieb</strong>, <strong>Zahlungsabwicklung</strong> und <strong>unsere Marge</strong>.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4">
                     <a href="/portal#/register" class="bg-white text-primary-800 px-8 py-3 rounded-lg font-semibold hover:bg-primary-50 transition text-center shadow-lg">
@@ -44,8 +44,15 @@ ob_start();
                         <div class="flex justify-between text-xs text-primary-300"><span>zzgl. Startgebühr (Betreiber)</span><span>1,00 &euro;</span></div>
                         <div class="flex justify-between text-xs text-primary-300"><span>zzgl. Zahlungsart-Fixgebühr</span><span>0,35 &euro;</span></div>
                     </div>
-                    <div class="mt-4 bg-primary-500/30 rounded-lg p-3 text-xs text-primary-100 text-center">
-                        Prozentuale Aufschlüsselung + fester Aufschlag – vor Ladebeginn
+                    <div class="mt-4 bg-primary-500/20 rounded-lg p-3 text-xs text-primary-100">
+                        <div class="font-semibold mb-2 text-center">Prozentuale Verteilung (Beispiel)</div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between"><span>Betreiber / Infrastruktur</span><span class="font-mono">~&nbsp;70&nbsp;%</span></div>
+                            <div class="flex justify-between"><span>Roaming / Betrieb</span><span class="font-mono">~&nbsp;26&nbsp;%</span></div>
+                            <div class="flex justify-between"><span>Zahlungsabwicklung</span><span class="font-mono">~&nbsp;2&nbsp;%</span></div>
+                            <div class="flex justify-between"><span>Unsere Marge</span><span class="font-mono">~&nbsp;2&nbsp;%</span></div>
+                        </div>
+                        <div class="mt-2 text-center opacity-80">Anteile variieren je nach Ladestation</div>
                     </div>
                 </div>
             </div>
@@ -107,7 +114,21 @@ ob_start();
                     <div class="flex justify-between text-xs text-gray-500"><span>Startgebühr (Betreiber)</span><span>1,00 &euro;</span></div>
                     <div class="flex justify-between text-xs text-gray-500"><span>Zahlungsart-Fixgebühr (PayPal)</span><span>0,35 &euro;</span></div>
                 </div>
-                <p class="text-xs text-gray-500 mt-3">+ prozentuale Aufteilung aller Bestandteile sichtbar</p>
+                <div class="mt-3 bg-white rounded-lg p-3 border border-primary-200">
+                    <div class="text-xs font-semibold text-primary-800 mb-2">Prozentuale Aufteilung (Beispiel)</div>
+                    <div class="flex h-4 rounded-full overflow-hidden mb-2">
+                        <div class="bg-primary-800" style="width:70%"></div>
+                        <div class="bg-primary-500" style="width:26%"></div>
+                        <div class="bg-accent-500" style="width:2%"></div>
+                        <div class="bg-green-500" style="width:2%"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1 text-xs text-gray-600">
+                        <span><span class="inline-block w-2 h-2 rounded-full bg-primary-800 mr-1"></span>Betreiber ~&nbsp;70&nbsp;%</span>
+                        <span><span class="inline-block w-2 h-2 rounded-full bg-primary-500 mr-1"></span>Roaming ~&nbsp;26&nbsp;%</span>
+                        <span><span class="inline-block w-2 h-2 rounded-full bg-accent-500 mr-1"></span>Zahlung ~&nbsp;2&nbsp;%</span>
+                        <span><span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span>Marge ~&nbsp;2&nbsp;%</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -132,8 +153,8 @@ ob_start();
                 <div class="w-12 h-12 bg-accent-100 rounded-lg flex items-center justify-center mb-5">
                     <svg class="w-6 h-6 text-accent-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </div>
-                <h3 class="text-xl font-semibold mb-3">Alle Kosten sichtbar</h3>
-                <p class="text-gray-600">Anbieterpreis, unser Aufschlag, Startgebühren, Minutenpreise, Blockiergebühren, Zahlungsartenkosten – alles vor Ladebeginn, alles aufgeschlüsselt.</p>
+                <h3 class="text-xl font-semibold mb-3">Prozentuale Partner-Aufteilung</h3>
+                <p class="text-gray-600">Sie sehen vor Ladebeginn, welcher Anteil an Betreiber&nbsp;/ Infrastruktur, an Roaming&nbsp;/ Betrieb, an die Zahlungsabwicklung und an unsere Marge geht – in Prozent, ladespezifisch berechnet.</p>
             </div>
             <div class="bg-gray-50 rounded-xl p-8 hover:shadow-lg transition">
                 <div class="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-5">
@@ -161,7 +182,7 @@ ob_start();
             <div class="text-center">
                 <div class="w-16 h-16 bg-primary-700 text-white rounded-full mx-auto mb-6 flex items-center justify-center text-2xl font-bold">2</div>
                 <h3 class="text-xl font-semibold mb-3">Ladestation auswählen</h3>
-                <p class="text-gray-600">Sehen Sie vorab den Anbieterpreis, unseren festen 1-Cent-Aufschlag, Ihre Zahlungsartenkosten und alle Betreiber-Gebühren – aufgeschlüsselt in Prozent und Cent.</p>
+                <p class="text-gray-600">Sehen Sie vorab die prozentuale Verteilung auf Betreiber, Roaming, Zahlungsabwicklung und unsere Marge – plus unseren festen 1-Cent-Aufschlag und alle Betreiber-Gebühren in Cent.</p>
             </div>
             <div class="text-center">
                 <div class="w-16 h-16 bg-primary-700 text-white rounded-full mx-auto mb-6 flex items-center justify-center text-2xl font-bold">3</div>
@@ -176,7 +197,7 @@ ob_start();
 <section class="py-20 bg-primary-800 text-white">
     <div class="max-w-4xl mx-auto px-4 text-center">
         <h2 class="text-3xl md:text-4xl font-bold mb-6">1 Cent pro kWh. So einfach ist unser Modell.</h2>
-        <p class="text-lg text-primary-100 mb-8">Ein fester Aufschlag. Sichtbare Zahlungsartenkosten. Prozentuale Aufschlüsselung. 9,99&nbsp;&euro;/Monat. Alles vor Ladebeginn.</p>
+        <p class="text-lg text-primary-100 mb-8">Ein fester Aufschlag. Sichtbare Zahlungsartenkosten. Prozentuale Partner-Aufteilung: Betreiber, Roaming, Zahlungsabwicklung, Marge. 9,99&nbsp;&euro;/Monat. Alles vor Ladebeginn.</p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
             <a href="/portal#/register" class="bg-white text-primary-800 px-8 py-3 rounded-lg font-semibold hover:bg-primary-50 transition shadow-lg">Jetzt registrieren</a>
             <a href="/transparenz" class="border-2 border-white/30 px-8 py-3 rounded-lg font-semibold hover:bg-white/10 transition">Transparenz-Modell ansehen</a>
