@@ -26,7 +26,7 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 | Prozess | Modus | Grund |
 |---------|-------|-------|
 | Preisberechnung | Synchron | User wartet auf Preis |
-| Session Start/Stop | Synchron | User wartet auf Bestätigung |
+| Session Start/Stop | Hybrid (Request + async Bestätigung) | Sofortiges UI-Feedback (pending→starting), finaler Status via Polling/Push |
 | Session-Status-Polling | Synchron (Polling) | Echtzeit-Feedback nötig |
 | Charge-Point-Sync von Providern | Async (Cron, alle 10 Min) | Hintergrundprozess |
 | Invoice-Erstellung (Lexware) | Async (Cron/Queue) | Darf fehlschlagen + Retry |
@@ -46,7 +46,7 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - **ChargingService**: Session-Lifecycle (Start, Stop, Status)
 - **BillingService**: Invoice-Erstellung, Lexware-Sync, PDF-Handling
 - **AdminService**: Dashboard-Daten, Nutzerverwaltung, Provider-Management
-- **NotificationService**: Event-Dispatch, Push-Versand via FCM, Präferenzprüfung, Token-Management
+- **NotificationService**: Event→Queue-Dispatch, Präferenzprüfung, Token-Management (Push-Versand ausschließlich via Worker)
 - **LiveCostService**: Live-Kostenschätzung aus Snapshot + aktuellem Session-Status, Foreground-Notification-Payload
 
 ---
@@ -112,7 +112,9 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - **structured_tariff_json**: Enthält alle Tarif-Elemente (Zeitabhängigkeit, Staffelung, Blockiergebühren) exakt wie vom Provider geliefert, nicht vereinfacht
 
 ### charging_sessions
-- id (PK), user_id (FK→users), connector_id (FK→connectors), provider_id (FK→providers), payment_method_id (FK→payment_methods), pricing_snapshot_id (FK→pricing_snapshots), external_session_id, status [pending|active|completed|failed|cancelled], started_at, ended_at, energy_kwh (DECIMAL 10,4), duration_seconds, blocking_duration_seconds (INT, nullable – Zeit nach Ladeschluss bis Kabelabzug), total_price_cent, currency [EUR], created_at, updated_at
+- id (PK), user_id (FK→users), connector_id (FK→connectors), provider_id (FK→providers), payment_method_id (FK→payment_methods), pricing_snapshot_id (FK→pricing_snapshots), external_session_id, status [pending|starting|active|stopping|completed|failed|cancelled], started_at, ended_at, energy_kwh (DECIMAL 10,4), duration_seconds, blocking_duration_seconds (INT, nullable – Zeit nach Ladeschluss bis Kabelabzug), total_price_cent, currency [EUR], created_at, updated_at
+- **Status-State-Machine**: pending → starting (Provider-Start angefragt) → active (Provider bestätigt Ladung) → stopping (Stop angefragt) → completed (Provider bestätigt Ende + Billing). Fehlerpfade: pending→failed, starting→failed (Provider-Timeout/Reject), active→failed (Ladefehler), stopping→failed (Stop-Timeout), active→cancelled (User-Abbruch). **Nur `starting` und `stopping` sind Zwischen-Zustände mit Timeout-Überwachung.**
+- **Timeout-Regeln**: `starting` > 2 Min ohne Provider-Bestätigung → 1x Retry, dann failed. `stopping` > 5 Min ohne Provider-Bestätigung → 1x Retry, dann completed (Force-Close, Billing mit letzten bekannten Werten).
 - **blocking_duration_seconds**: Wird vom Provider gemeldet oder berechnet (ended_at bis cable_disconnected_at). Relevant für Blockiergebühren-Berechnung im Final Calculation
 
 ### pricing_snapshots ⚡ IMMUTABLE nach Erstellung
@@ -181,6 +183,13 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - **Nicht jedes Event erzeugt Push**: Nur Events, die gemapped sind (siehe Notification-System Sektion) UND Nutzerpräferenz enabled.
 - **Write-only**: Wie audit_log – nur Inserts, keine Updates/Deletes.
 - **Index**: (session_id, created_at) für chronologisches Lesen.
+
+### notification_queue
+- id (PK), user_id (FK→users), session_id (FK→charging_sessions, nullable), event_type (VARCHAR), payload_json (JSON – fertig gebauter Push-Payload), target_device_ids_json (JSON – Array aktiver Device-IDs zum Dispatch-Zeitpunkt), attempt_count (INT DEFAULT 0), max_attempts (INT DEFAULT 3), next_attempt_at (DATETIME, nullable), last_error (TEXT, nullable), status [pending|processing|sent|failed|skipped], created_at, updated_at
+- **Zweck**: Vollständig asynchrone Push-Queue. KEIN Push wird synchron im Request-Context gesendet. NotificationService schreibt hier rein, Worker liest und sendet.
+- **skipped**: User hat Präferenz für diesen Event-Type deaktiviert (wird trotzdem geloggt für Debugging).
+- **Index**: (status, next_attempt_at) für Worker-Query, (user_id, status) für User-bezogene Abfragen, (session_id) für Session-bezogene Pushes.
+- **Retention**: Erfolgreich gesendete Einträge (status=sent) werden nach 30 Tagen per Cron gelöscht.
 
 ### admin_users (separate Tabelle, keine Vermischung mit Endkunden)
 - id (PK), email (unique), password_hash, display_name, role [super_admin|admin|viewer], status [invited|totp_pending|active|blocked], last_login_at, created_at, updated_at
@@ -665,23 +674,27 @@ Events werden von Fachservices erzeugt und vom NotificationService in Push-Nachr
 
 ### Entkopplung Fachlogik ↔ Push-Versand
 
-**Ablauf**:
+**Ablauf (vollständig asynchron)**:
 1. Fachservice (z.B. ChargingService) schreibt `session_events`-Record
-2. Fachservice ruft `NotificationService::dispatch(userId, eventType, eventData)` auf
+2. Fachservice ruft `NotificationService::enqueue(userId, eventType, eventData)` auf
 3. NotificationService prüft `notification_preferences` für diesen User + event_type
-4. Wenn enabled: baut Payload, sendet an alle aktiven Geräte
-5. Wenn disabled: kein Push, aber session_event bleibt persistiert
+4. Wenn enabled: baut Payload, lädt aktive Geräte, schreibt `notification_queue`-Eintrag (status=pending, next_attempt_at=NOW)
+5. Wenn disabled: schreibt `notification_queue`-Eintrag mit status=skipped (Debugging/Audit)
+6. **Return** – Fachservice ist sofort fertig, KEIN Push wird synchron gesendet
+7. Worker `php spark notifications:process-queue` (Cron alle 30 Sek) liest pending-Einträge, sendet via FCM, setzt status=sent oder erhöht attempt_count
 
-**Wichtig**: Session-Events werden IMMER geschrieben, unabhängig von Push-Präferenzen. Push ist ein Seiteneffekt, nicht die Primäraktion.
+**Wichtig**: Session-Events werden IMMER geschrieben, unabhängig von Push-Präferenzen. Push ist ein Seiteneffekt, nicht die Primäraktion. **Kein einziger Push wird jemals synchron im Request-Context gesendet.**
 
-### Push-Retry-Strategie
+### Push-Retry-Strategie (Worker-basiert)
 
-- Erster Versuch: sofort (synchron im Request-Context)
-- FCM timeout oder 5xx → notification_queue-Eintrag (DB-Queue)
-- Cron: `php spark notifications:retry-pending` alle 2 Min
-- Max. 3 Retries mit Backoff: 2 Min, 10 Min, 30 Min
-- Nach 3 Fehlschlägen: verworfen (kein weiterer Retry – Push ist best-effort)
-- Bei `UNREGISTERED` / `INVALID_ARGUMENT`: kein Retry, Device deaktivieren
+- **Verbindliche Regel**: ALLE Pushes laufen über `notification_queue` → Worker. Kein synchroner Versand.
+- Worker: `php spark notifications:process-queue` – Cron alle 30 Sekunden
+- Worker-Ablauf: SELECT ... WHERE status='pending' AND next_attempt_at <= NOW() ORDER BY next_attempt_at LIMIT 50 → status='processing' → FCM-Versand → status='sent' oder Retry
+- FCM timeout oder 5xx → attempt_count++, next_attempt_at = Backoff, status='pending'
+- Backoff-Intervalle: 2 Min, 10 Min, 30 Min (3 Versuche)
+- Nach max_attempts (3) erreicht: status='failed' (kein weiterer Retry – Push ist best-effort)
+- Bei `UNREGISTERED` / `INVALID_ARGUMENT`: sofort status='failed', Device deaktivieren (is_active=false)
+- **Concurrency**: Worker setzt status='processing' mit WHERE status='pending' (optimistisches Locking). Bei mehreren Workern: SELECT ... FOR UPDATE SKIP LOCKED.
 
 ### MVP-Regeln für Live-Kosten-Push
 
