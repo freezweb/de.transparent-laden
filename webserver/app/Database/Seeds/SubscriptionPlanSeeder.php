@@ -71,7 +71,8 @@ class SubscriptionPlanSeeder extends Seeder
         ];
 
         foreach ($plans as $plan) {
-            $planId = $this->db->table('subscription_plans')->insert($plan, true);
+            $this->db->table('subscription_plans')->insert($plan);
+            $planId = $this->db->insertID();
 
             $this->db->table('subscription_plan_versions')->insert([
                 'plan_id'                        => $planId,
