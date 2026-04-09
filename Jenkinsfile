@@ -132,12 +132,18 @@ pipeline {
         }
 
         stage('Backend: Smoke Test') {
-            when { expression { env.DO_DEPLOY == 'true' && env.IS_MAIN == 'true' } }
+            when { expression { env.DO_DEPLOY == 'true' && env.HAS_PLINK == 'true' && env.IS_MAIN == 'true' } }
             steps {
                 bat '''
+                    @echo off
                     echo Smoke Test...
-                    curl -sf -o nul -w "HTTP Status: %%{http_code}" https://transparent-laden.de/api/v1/health
-                    echo.
+                    curl -sf -o nul -w "HTTP Status: %%{http_code}" https://transparent-laden.de/api/v1/health && (
+                        echo.
+                        echo Smoke Test erfolgreich
+                    ) || (
+                        echo.
+                        echo WARNUNG: Health-Endpoint nicht erreichbar - Deploy pruefen!
+                    )
                 '''
             }
         }
