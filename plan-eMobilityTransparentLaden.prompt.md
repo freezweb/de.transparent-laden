@@ -178,7 +178,7 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 ### session_events
 - id (PK), session_id (FK→charging_sessions), event_type (VARCHAR), event_data_json (nullable), energy_kwh_at_event (DECIMAL 10,4, nullable), live_cost_cent (INT, nullable), created_at
 - **Zweck**: Persistiertes Protokoll aller relevanten Zustandsänderungen einer Session.
-- **event_type-Werte**: `started`, `active`, `energy_flowing`, `paused`, `resumed`, `stop_requested`, `completed`, `failed`, `cancelled`, `blocking_started`, `live_cost_update`
+- **event_type-Werte**: `started`, `starting_timeout`, `active`, `energy_flowing`, `paused`, `resumed`, `stop_requested`, `stopping_timeout`, `completed`, `failed`, `cancelled`, `blocking_started`, `live_cost_update`, `recovery_retry`, `recovery_completed`, `recovery_force_closed`, `recovery_failed`
 - **event_data_json**: Kontextdaten je Typ, z.B. `{"kwh": 5.2, "duration_sec": 600, "provider_status": "Charging"}` oder `{"error_code": "EVSE_FAULT"}`
 - **Nicht jedes Event erzeugt Push**: Nur Events, die gemapped sind (siehe Notification-System Sektion) UND Nutzerpräferenz enabled.
 - **Write-only**: Wie audit_log – nur Inserts, keine Updates/Deletes.
@@ -628,6 +628,41 @@ Geschätzter Preis: 42 ct/kWh
 
 ---
 
+## 6b. SESSION RECOVERY & STUCK-SESSION-HANDLING
+
+### Problem
+Sessions können in Zwischen-Zuständen (`starting`, `stopping`) hängen bleiben, wenn Provider nicht rechtzeitig bestätigen oder das Backend während eines Requests abstürzt.
+
+### Recovery-Cron: `php spark charging:recover-stuck-sessions`
+- **Frequenz**: Alle 2 Minuten
+- **Scope**: Nur Sessions in `starting` oder `stopping` Status
+
+### Recovery-Regeln
+
+| Status | Timeout | Aktion | Ergebnis |
+|--------|---------|--------|----------|
+| `starting` | > 2 Min ohne Provider-Bestätigung | 1x Retry Provider.startSession() | Erfolg → `active`, Fehler → `failed` |
+| `starting` | > 4 Min (nach Retry) | Abbruch | `failed` + session_event `recovery_failed` + Push |
+| `stopping` | > 5 Min ohne Provider-Bestätigung | 1x Retry Provider.stopSession() | Erfolg → `completed` (normales Billing) |
+| `stopping` | > 10 Min (nach Retry) | Force-Close | `completed` (Billing mit letzten bekannten Werten) + session_event `recovery_force_closed` + Push |
+| `active` | > 24h ohne Status-Update | Admin-Alarm | Bleibt `active`, Admin muss manuell eingreifen (kein automatisches Beenden) |
+
+### Recovery-Ablauf
+1. SELECT alle Sessions WHERE status IN ('starting','stopping') AND updated_at < NOW() - timeout
+2. Für jede Session: Prüfe ob Provider-Status abfragbar (getSessionStatus())
+3. Wenn Provider sagt "active" → lokalen Status anpassen auf `active`
+4. Wenn Provider sagt "completed" → lokalen Status anpassen, Billing triggern
+5. Wenn Provider nicht erreichbar → Retry-Counter prüfen, ggf. Force-Close
+6. Jede Recovery-Aktion wird als `session_event` persistiert (event_type: `recovery_retry`, `recovery_completed`, `recovery_force_closed`, `recovery_failed`)
+7. Push an User bei jeder Recovery-Zustandsänderung (via notification_queue)
+
+### Sicherheitsregeln
+- **Kein automatisches Beenden aktiver Sessions**: Nur `starting`/`stopping` werden automatisch recovered. Langläufer in `active` erzeugen nur Admin-Alarm.
+- **Billing bei Force-Close**: Immer mit letzten bekannten Werten (energy_kwh, duration_seconds aus letztem Status-Update). session_event dokumentiert, dass Force-Close stattfand.
+- **Idempotenz**: Recovery-Cron muss idempotent sein – doppeltes Ausführen darf keinen Schaden anrichten.
+
+---
+
 ## 6a. PUSH & NOTIFICATION SYSTEM
 
 ### Push-Infrastruktur
@@ -643,8 +678,8 @@ Geschätzter Preis: 42 ct/kWh
 - Prüft Nutzerpräferenzen (notification_preferences)
 - Lädt aktive Geräte des Users (user_devices)
 - Baut plattform-spezifische Payloads (Android: data message, iOS: notification + data)
-- Sendet via FCM HTTP v1 an alle aktiven Geräte des Users
-- Persistiert Versandversuch + Ergebnis
+- Schreibt `notification_queue`-Eintrag (KEIN direkter FCM-Versand)
+- **NotificationWorker** (separater Cron-Prozess) liest Queue und sendet via FCM
 
 ### Token-Lifecycle
 
@@ -1165,7 +1200,7 @@ Infrastruktur 68% • Roaming 8% • Plattform 20% • Zahlung 4%
 |---|--------|------------|-------------|
 | 1 | Tarif ändert sich zwischen Vorschau und Start | Snapshot nur beim Start, Vorschau ist Schätzung | Snapshot-Tabelle IMMUTABLE |
 | 2 | Provider-API-Ausfall | Retry mit Timeout, klare Fehlermeldung | Circuit-Breaker im Adapter |
-| 3 | Inkonsistente Sessions (lokal vs Provider) | Zwei-Phasen: lokal pending → Provider start → lokal active | Recovery-Cron für stale Sessions |
+| 3 | Inkonsistente Sessions (lokal vs Provider) | Zwei-Phasen mit Zwischen-Status: pending → starting → active → stopping → completed. Recovery-Cron für stuck Sessions (Sektion 6b) | Recovery-Cron + Timeout-Regeln |
 | 4 | Lexware-Ausfall | Lokale Invoice = Truth, Retry-Queue, Admin-Alarm | DB-Queue mit Backoff |
 
 ### Hoch
@@ -1188,6 +1223,10 @@ Infrastruktur 68% • Roaming 8% • Plattform 20% • Zahlung 4%
 | 12 | Provider liefert keine Zwischen-kWh | Fallback auf Schätzung (Connector-Power), UI-Kennzeichnung `data_source: estimated` |
 | 13 | Zu viele Push-Nachrichten nerven Nutzer | Schwellen-basierte Logik (nicht jede Sekunde), konfigurierbare Präferenzen pro Event-Type, Opt-out möglich |
 | 14 | Android Foreground Service Batterieverbrauch | Polling-Intervall 30 Sek (nicht 1 Sek), Service endet automatisch bei Session-Ende |
+| 15 | Push-Verzögerung durch Queue | Queue-Worker läuft alle 30 Sek → Push kann bis zu 30 Sek verzögert sein. Für MVP akzeptabel. Post-MVP: Event-Listener oder kürzeres Intervall evaluieren |
+| 16 | Session bleibt in `starting`/`stopping` hängen | Recovery-Cron `charging:recover-stuck-sessions` alle 2 Min. Timeout-basierte Eskalation mit max. 1 Retry. Force-Close bei `stopping`-Timeout |
+| 17 | Provider bestätigt Session-Start/Stop nicht rechtzeitig | Zwischen-Status `starting`/`stopping` + Timeout-Regeln (2 Min / 5 Min). User sieht sofort UI-Feedback, finaler Status kommt async |
+| 18 | Recovery-Cron agiert zu aggressiv | Kein automatisches Beenden aktiver Sessions. Nur `starting`/`stopping` werden recovered. `active` > 24h → nur Admin-Alarm. Billing bei Force-Close nur mit letzten bekannten Werten |
 
 ---
 
@@ -1293,14 +1332,15 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 ### Phase 6: Charging Sessions
 **Abhängigkeiten**: Phase 5
 
-1. Migration: charging_sessions-Tabelle (inkl. blocking_duration_seconds)
+1. Migration: charging_sessions-Tabelle (inkl. blocking_duration_seconds, Status-Enum mit `starting` + `stopping`)
 2. ChargingSessionModel
 3. ChargingService:
-   - startSession(): Session erstellen → Snapshot → Provider.startSession()
-   - stopSession(): Provider.stopSession() → Session updaten → Billing triggern
-   - getStatus(): Provider-Status → lokal updaten
+   - startSession(): Session erstellen (status=pending) → Snapshot → status=starting → Provider.startSession() → bei Erfolg: status=active
+   - stopSession(): status=stopping → Provider.stopSession() → bei Erfolg: status=completed + Billing triggern
+   - getStatus(): Provider-Status → lokal updaten (inkl. starting→active, stopping→completed Transitions)
 4. ChargingController (start, stop, active, sessions, session-detail)
-5. Cron-Command: charging:check-stale-sessions
+5. Cron-Command: `php spark charging:check-stale-sessions`
+6. Cron-Command: `php spark charging:recover-stuck-sessions` (Stuck-Session-Recovery, alle 2 Min)
 
 ### Phase 6a: Push-Notifications & Live-Kosten
 **Abhängigkeiten**: Phase 6 + Phase 2 (user_devices benötigt users)
@@ -1308,17 +1348,19 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 1. Migration: user_devices-Tabelle
 2. Migration: notification_preferences-Tabelle
 3. Migration: session_events-Tabelle
-4. UserDeviceModel, NotificationPreferenceModel, SessionEventModel
-5. FCM-Client (CI4 CURLRequest → FCM HTTP v1, OAuth2 Service-Account)
-6. NotificationService (Event-Dispatch, Präferenzprüfung, Multi-Device-Versand, Token-Invalidierung)
-7. LiveCostService (Snapshot + aktuelle Session-Daten → live_estimate berechnen)
-8. DeviceController (register, update, delete, list)
-9. NotificationPreferenceController (get, update)
-10. LiveStatusController (GET /charging/active/live-status)
-11. ChargingService erweitern: Session-Events schreiben, NotificationService aufrufen
-12. Cron-Command: `php spark devices:cleanup` (inaktive Geräte > 90 Tage löschen)
-13. Cron-Command: `php spark notifications:retry-pending` (fehlgeschlagene Pushes)
-14. Blocking-Fee-Timer: `php spark charging:check-blocking-warnings` (Blocking-Warnung 5 Min vorher)
+4. Migration: notification_queue-Tabelle
+5. UserDeviceModel, NotificationPreferenceModel, SessionEventModel, NotificationQueueModel
+6. FCM-Client (CI4 CURLRequest → FCM HTTP v1, OAuth2 Service-Account)
+7. NotificationService (Event→Queue-Dispatch, Präferenzprüfung, Payload-Builder, Token-Invalidierung)
+8. LiveCostService (Snapshot + aktuelle Session-Daten → live_estimate berechnen)
+9. DeviceController (register, update, delete, list)
+10. NotificationPreferenceController (get, update)
+11. LiveStatusController (GET /charging/active/live-status)
+12. ChargingService erweitern: Session-Events schreiben, NotificationService.enqueue() aufrufen
+13. Cron-Command: `php spark devices:cleanup` (inaktive Geräte > 90 Tage löschen)
+14. Cron-Command: `php spark notifications:process-queue` (Queue-Worker, alle 30 Sek)
+15. Cron-Command: `php spark notifications:cleanup-sent` (gesendete Einträge > 30 Tage löschen)
+16. Blocking-Fee-Timer: `php spark charging:check-blocking-warnings` (Blocking-Warnung 5 Min vorher)
 
 ### Phase 7: Billing & Lexware
 **Abhängigkeiten**: Phase 6
@@ -1403,6 +1445,8 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 | E18 | Polling statt WebSocket für Live-Status (MVP) | Einfacher zu implementieren, keine zusätzliche Infrastruktur, 30-Sek-Intervall ausreichend für Transparenz | WebSocket – höhere Komplexität, Post-MVP evaluieren wenn sub-5s Updates nötig |
 | E19 | Euro-Schwellen für Live-Kosten-Push statt festes Intervall | Reduziert Push-Spam, relevanter für Nutzer ("Du hast gerade 5€ überschritten"), ergänzt durch 10-Min-Intervall | Festes Intervall (z.B. jede Minute) – zu viele irrelevante Pushes |
 | E20 | Drei-Begriffe-Modell (preview_estimate / live_estimate / final_total) | Klare semantische Trennung verhindert Verwirrung. Jeder Begriff hat definierte Phase, Berechnung und Verbindlichkeit | Einheitlicher "Preis"-Begriff – führt zu Beschwerden wenn Estimate ≠ Final |
+| E21 | Push ist IMMER vollständig asynchron (Queue-basiert) | Pipeline: Event → session_events → notification_queue → Worker → FCM. Kein einziger Push wird synchron im Request-Context gesendet. Entkoppelt Fachlogik vollständig von Push-Infrastruktur, verhindert Request-Blocking bei FCM-Timeouts | Synchroner Erstversuch + Queue für Retries – widerspricht Entkopplungsprinzip, erhöht Request-Latenz |
+| E22 | Zwischen-Zustände `starting`/`stopping` für Charging Sessions | Ermöglicht sofortiges UI-Feedback ("Session wird gestartet") während Provider async bestätigt. Timeout-basierte Recovery verhindert Zombie-Sessions. State-Machine ist explizit und testbar | Nur `pending`/`active` – kein Unterschied zwischen "angefragt" und "bestätigt", Recovery schwer umsetzbar |
 
 ---
 
@@ -1446,6 +1490,7 @@ webserver/app/
 │   ├── UserDeviceModel.php
 │   ├── NotificationPreferenceModel.php
 │   ├── SessionEventModel.php
+│   ├── NotificationQueueModel.php
 │   └── AuditLogModel.php
 ├── Entities/
 │   ├── StructuredTariff.php       # Rohdaten-Tarif vom Provider (TariffElement[], PriceComponent[], TariffRestrictions)
@@ -1479,7 +1524,8 @@ webserver/app/
 │       ├── UserService.php
 │       ├── SubscriptionService.php
 │       ├── ChargingService.php
-│       ├── NotificationService.php    # Event-Dispatch, FCM-Client, Token-Mgmt
+│       ├── NotificationService.php    # Event→Queue-Dispatch, Präferenzprüfung, Token-Mgmt
+│       ├── NotificationWorker.php     # Queue-Processor: liest notification_queue, sendet via FCM
 │       ├── LiveCostService.php        # Snapshot + Session-Daten → live_estimate
 │       └── AuditService.php
 ├── Filters/
@@ -1506,7 +1552,8 @@ webserver/app/
 │   │   ├── 016_CreateInvoicesTable.php
 │   │   ├── 017_CreateUserDevicesTable.php
 │   │   ├── 018_CreateNotificationPreferencesTable.php
-│   │   └── 019_CreateSessionEventsTable.php
+│   │   ├── 019_CreateSessionEventsTable.php
+│   │   └── 020_CreateNotificationQueueTable.php
 │   └── Seeds/
 │       ├── AdminSeeder.php
 │       ├── SubscriptionPlanSeeder.php
