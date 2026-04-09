@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:einfach_laden/features/charging/providers/charging_provider.dart';
+import 'package:einfach_laden/core/widgets/price_breakdown_widget.dart';
 
 class ChargingScreen extends ConsumerWidget {
   const ChargingScreen({super.key});
@@ -109,6 +110,18 @@ class _ActiveSessionCard extends ConsumerWidget {
                   _InfoChip(label: 'Kosten', value: '${((session['current_cost_cent'] ?? 0) / 100).toStringAsFixed(2)} €'),
                 ],
               ),
+              if (session['pricing'] != null) ...[
+                const SizedBox(height: 12),
+                PriceBreakdownWidget(
+                  pricing: session['pricing'] as Map<String, dynamic>,
+                  isEstimate: true,
+                  compact: true,
+                  showPercentageBar: true,
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                const PriceBreakdownLegend(),
+              ],
             ],
           ),
         ),
@@ -135,7 +148,14 @@ class _HistorySessionCard extends StatelessWidget {
           color: status == 'completed' ? Colors.green : Colors.red,
         ),
         title: Text('$energy kWh • ${cost.toStringAsFixed(2)} €'),
-        subtitle: Text(session['created_at'] ?? ''),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(session['created_at'] ?? ''),
+            const SizedBox(height: 4),
+            const Text('Partner-Aufteilung ansehen →', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
+        ),
         trailing: const Icon(Icons.chevron_right),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:einfach_laden/features/charge_point/providers/charge_point_provider.dart';
 import 'package:einfach_laden/features/charging/providers/charging_provider.dart';
+import 'package:einfach_laden/core/widgets/price_breakdown_widget.dart';
 
 class ChargePointDetailScreen extends ConsumerWidget {
   final int chargePointId;
@@ -135,7 +136,7 @@ class _ConnectorCard extends StatelessWidget {
             ),
             if (connector['pricing'] != null) ...[
               const Divider(height: 24),
-              _PricingInfo(pricing: connector['pricing'] as Map<String, dynamic>),
+              PriceBreakdownWidget(pricing: connector['pricing'] as Map<String, dynamic>),
             ],
             if (isAvailable) ...[
               const SizedBox(height: 12),
@@ -198,36 +199,4 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _PricingInfo extends StatelessWidget {
-  final Map<String, dynamic> pricing;
-  const _PricingInfo({required this.pricing});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Preisaufschlüsselung', style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        if (pricing['energy_price_ct_kwh'] != null)
-          _pricingRow('Energiepreis', '${pricing['energy_price_ct_kwh']} ct/kWh'),
-        if (pricing['time_price_ct_min'] != null)
-          _pricingRow('Zeitpreis', '${pricing['time_price_ct_min']} ct/min'),
-        if (pricing['roaming_fee_ct_kwh'] != null && pricing['roaming_fee_ct_kwh'] > 0)
-          _pricingRow('Roaming', '${pricing['roaming_fee_ct_kwh']} ct/kWh'),
-        if (pricing['platform_fee_ct_kwh'] != null)
-          _pricingRow('Plattformgebühr', '${pricing['platform_fee_ct_kwh']} ct/kWh'),
-      ],
-    );
-  }
-
-  Widget _pricingRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [Text(label, style: const TextStyle(fontSize: 12)), Text(value, style: const TextStyle(fontSize: 12))],
-      ),
-    );
-  }
-}
+// PricingInfo replaced by PriceBreakdownWidget from core/widgets

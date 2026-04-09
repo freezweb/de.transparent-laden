@@ -5,6 +5,12 @@ class AppTheme {
   static const _secondaryColor = Color(0xFF66BB6A);
   static const _errorColor = Color(0xFFD32F2F);
 
+  // Partner-Aufteilung Farben (konsistent mit Website)
+  static const Color operatorColor = Color(0xFF1B5E20);     // Betreiber/Infrastruktur – primary-800
+  static const Color roamingColor = Color(0xFF388E3C);       // Roaming/Betrieb – primary-500
+  static const Color paymentColor = Color(0xFFF57C00);       // Zahlungsabwicklung – accent/orange
+  static const Color marginColor = Color(0xFF4CAF50);        // Unsere Marge – green-500
+
   static ThemeData get lightTheme => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(

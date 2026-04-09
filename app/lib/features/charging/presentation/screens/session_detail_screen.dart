@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:einfach_laden/features/charging/providers/charging_provider.dart';
+import 'package:einfach_laden/core/widgets/price_breakdown_widget.dart';
 
 class SessionDetailScreen extends ConsumerStatefulWidget {
   final int sessionId;
@@ -107,8 +108,11 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
                       children: [
                         Text('Kosten', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 12),
-                        _detailRow('Gesamt', '${(session['total_price_cent'] / 100).toStringAsFixed(2)} €',
-                            bold: true),
+                        if (session['pricing'] != null)
+                          PriceBreakdownWidget(pricing: session['pricing'] as Map<String, dynamic>)
+                        else
+                          _detailRow('Gesamt', '${(session['total_price_cent'] / 100).toStringAsFixed(2)} €',
+                              bold: true),
                       ],
                     ),
                   ),
@@ -144,23 +148,38 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
   }
 
   Widget _buildLiveData(BuildContext context, Map<String, dynamic> live) {
-    return Card(
-      color: Theme.of(context).colorScheme.tertiaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _LiveDataItem(label: 'Energie', value: '${live['energy_kwh'] ?? 0}', unit: 'kWh'),
-            _LiveDataItem(label: 'Leistung', value: '${live['power_kw'] ?? 0}', unit: 'kW'),
-            _LiveDataItem(
-              label: 'Kosten',
-              value: ((live['live_costs']?['total_price_cent'] ?? 0) / 100).toStringAsFixed(2),
-              unit: '€',
+    final liveCosts = live['live_costs'] as Map<String, dynamic>? ?? {};
+    return Column(
+      children: [
+        Card(
+          color: Theme.of(context).colorScheme.tertiaryContainer,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _LiveDataItem(label: 'Energie', value: '${live['energy_kwh'] ?? 0}', unit: 'kWh'),
+                _LiveDataItem(label: 'Leistung', value: '${live['power_kw'] ?? 0}', unit: 'kW'),
+                _LiveDataItem(
+                  label: 'Kosten',
+                  value: ((liveCosts['total_endprice_cent'] ?? liveCosts['total_price_cent'] ?? 0) / 100).toStringAsFixed(2),
+                  unit: '€',
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+        if (liveCosts.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: PriceBreakdownWidget(pricing: liveCosts, isEstimate: true),
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+      ],
     );
   }
 
