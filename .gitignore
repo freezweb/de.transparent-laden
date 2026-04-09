@@ -1,0 +1,67 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ============================================
+# Backend (CodeIgniter 4)
+# ============================================
+webserver/vendor/
+webserver/writable/logs/*
+!webserver/writable/logs/index.html
+webserver/writable/cache/*
+!webserver/writable/cache/index.html
+webserver/writable/session/*
+!webserver/writable/session/index.html
+webserver/writable/debugbar/*
+!webserver/writable/debugbar/index.html
+webserver/writable/uploads/*
+!webserver/writable/uploads/index.html
+webserver/.env
+
+# ============================================
+# Flutter / Dart
+# ============================================
+app/.dart_tool/
+app/.packages
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/pubspec.lock
+app/.metadata
+app/android/.gradle/
+app/android/local.properties
+app/android/key.properties
+app/android/app/src/main/res/values/google_maps_api.xml
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/Flutter.framework
+app/ios/Flutter/Flutter.podspec
+
+# Generated
+*.g.dart
+*.freezed.dart
+
+# ============================================
+# Build Artifacts
+# ============================================
+*.apk
+*.aab
+*.ipa
+*.jks
+*.keystore
+mapping.txt
+
+# ============================================
+# Environment / Secrets
+# ============================================
+*.env
+.env.*
+!.env.example
+google-services.json
+GoogleService-Info.plist
