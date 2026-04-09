@@ -54,7 +54,11 @@ pipeline {
                     echo.
                     java -version
                     echo.
-                    flutter --version
+                    if exist "%FLUTTER_HOME%\\bin\\flutter.bat" (
+                        flutter --version
+                    ) else (
+                        echo WARNUNG: Flutter nicht gefunden unter %FLUTTER_HOME%
+                    )
                     echo ========================================
                 '''
             }
@@ -164,7 +168,7 @@ pipeline {
 
         stage('Flutter: Pub Get') {
             when {
-                expression { return params.BUILD_APK }
+                expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
             }
             steps {
                 dir('app') {
@@ -175,7 +179,7 @@ pipeline {
 
         stage('Flutter: Analyze') {
             when {
-                expression { return params.BUILD_APK }
+                expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
             }
             steps {
                 dir('app') {
@@ -187,7 +191,7 @@ pipeline {
         stage('Flutter: Test') {
             when {
                 allOf {
-                    expression { return params.BUILD_APK }
+                    expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
                     expression { return !params.SKIP_TESTS }
                 }
             }
@@ -201,7 +205,7 @@ pipeline {
         stage('Flutter: Build Debug APK') {
             when {
                 allOf {
-                    expression { return params.BUILD_APK }
+                    expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
                     not { branch 'main' }
                 }
             }
@@ -220,7 +224,7 @@ pipeline {
         stage('Flutter: Build Release APK') {
             when {
                 allOf {
-                    expression { return params.BUILD_APK }
+                    expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
                     branch 'main'
                 }
             }
@@ -256,7 +260,7 @@ pipeline {
         stage('Send APK to Telegram') {
             when {
                 allOf {
-                    expression { return params.BUILD_APK }
+                    expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
                     expression { return params.SEND_TELEGRAM }
                 }
             }
