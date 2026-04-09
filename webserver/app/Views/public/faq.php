@@ -1,5 +1,6 @@
 <?php
 $title = 'FAQ';
+$description = 'Häufig gestellte Fragen zu Transparent Laden – Tarif, Preisaufschlüsselung, Zahlungsarten und mehr.';
 ob_start();
 ?>
 <section class="py-16 bg-white">
@@ -9,14 +10,16 @@ ob_start();
         <div class="space-y-4" x-data="{ open: null }">
             <?php
             $faqs = [
-                ['Wie funktioniert die Preistransparenz?', 'Bei jedem Ladevorgang sehen Sie vorab und während der Ladung die vollständige Preisaufschlüsselung: Energiekosten, Netzentgelte, Steuern, CPO-Entgelt und unsere Marge. Nichts ist versteckt.'],
-                ['Brauche ich eine Ladekarte?', 'Nein. Die Authentifizierung erfolgt über die App oder - mit Pro-/Business-Abo - automatisch über Plug & Charge. Eine physische Karte ist nicht erforderlich.'],
-                ['Welche Ladepunkte kann ich nutzen?', 'Sie haben Zugang zu tausenden Ladepunkten in Deutschland und Europa über unsere Roaming-Partner. Die Verfügbarkeit sehen Sie in der App-Karte.'],
-                ['Wie wird abgerechnet?', 'Direkt nach dem Ladevorgang erhalten Sie eine detaillierte Rechnung mit allen Kosten. Die Zahlung erfolgt über Ihre hinterlegte Zahlungsart.'],
-                ['Was ist Plug & Charge?', 'Mit Plug & Charge stecken Sie nur das Ladekabel ein - Ihr Fahrzeug authentifiziert sich automatisch. Keine App, kein QR-Code nötig. Verfügbar im Pro- und Business-Abo.'],
-                ['Kann ich mehrere Fahrzeuge registrieren?', 'Ja. Im Business-Abo können Sie beliebig viele Fahrzeuge verwalten und erhalten eine Sammelrechnung.'],
+                ['Wie funktioniert die Preistransparenz?', 'Vor jedem Ladevorgang sehen Sie, wie sich der kWh-Preis prozentual zusammensetzt: Anteil Betreiber/Infrastruktur, Anteil Roaming/Betrieb, Anteil Zahlungsabwicklung, Steuern und unsere Marge – alles in Prozent. Zusätzlich werden Startgebühren, Blockiergebühren und Minutenpreise des Betreibers separat ausgewiesen.'],
+                ['Was unterscheidet Transparent Laden von anderen Lade-Apps?', 'Andere Apps zeigen Ihnen einen Endpreis pro kWh. Wir zeigen Ihnen zusätzlich, woraus dieser Preis besteht – welcher Anteil an den Betreiber, ans Roaming, an die Zahlungsabwicklung und an uns geht. Das gibt es so bei keiner anderen App.'],
+                ['Was kostet Transparent Laden?', 'Es gibt einen Tarif: 9,99 € pro Monat, monatlich kündbar. Dazu kommen die Ladekosten, die je nach Ladestation und Betreiber variieren. Es gibt keinen kostenlosen Tarif – die prozentuale Preistransparenz ist das Kernprodukt.'],
+                ['Brauche ich eine Ladekarte?', 'Nein. Die Authentifizierung erfolgt über die App oder über Plug & Charge (wenn Ihr Fahrzeug das unterstützt). Eine physische Karte ist nicht erforderlich.'],
+                ['Welche Ladepunkte kann ich nutzen?', 'Sie haben Zugang zu tausenden Ladepunkten in Deutschland und Europa über unsere Roaming-Partner. Die Verfügbarkeit sehen Sie in Echtzeit in der App.'],
+                ['Wie wird abgerechnet?', 'Nach dem Ladevorgang erhalten Sie eine Rechnung mit vollständiger Kostenaufschlüsselung. Die Zahlung erfolgt über Ihre hinterlegte Zahlungsart.'],
+                ['Beeinflusst meine Zahlungsart den Preis?', 'Ja. Verschiedene Zahlungsarten haben unterschiedliche Transaktionsgebühren – z. B. PayPal: 0,35 € fix + 1,2 % variabel. Diese Kosten werden Ihnen vor Ladebeginn als Teil der Preisaufschlüsselung angezeigt, damit Sie bewusst wählen können.'],
+                ['Was sind Startgebühren und Blockiergebühren?', 'Manche Ladestationsbetreiber erheben eine einmalige Startgebühr pro Ladevorgang oder Blockiergebühren bei längerem Stehen nach Ladeschluss. Diese Gebühren werden vom Betreiber festgelegt – nicht von uns. Wir zeigen sie Ihnen transparent vor Ladebeginn an.'],
+                ['Was ist Plug & Charge?', 'Mit Plug & Charge stecken Sie nur das Ladekabel ein – Ihr Fahrzeug authentifiziert sich automatisch. Keine App, kein QR-Code nötig. Die volle Preistransparenz bleibt erhalten.'],
                 ['Was passiert bei einer Ladestörung?', 'Unsere App erkennt Störungen automatisch und benachrichtigt Sie. Nicht geladene Energie wird nicht berechnet. Im Problemfall hilft unser Support.'],
-                ['Gibt es eine Mindestlaufzeit?', 'Nein. Sie können das Abo jederzeit monatlich kündigen. Das Basis-Konto ist dauerhaft kostenlos.'],
                 ['Wie sicher sind meine Daten?', 'Wir verwenden Ende-zu-Ende-Verschlüsselung, speichern Daten ausschließlich auf europäischen Servern und halten alle DSGVO-Vorgaben ein.'],
             ];
             foreach ($faqs as $i => $faq): ?>
@@ -38,5 +41,5 @@ ob_start();
 </section>
 <?php
 $content = ob_get_clean();
-echo view('layouts/public', ['title' => $title, 'content' => $content]);
+echo view('layouts/public', ['title' => $title, 'description' => $description, 'content' => $content]);
 ?>

@@ -80,13 +80,13 @@
                         </div>
                         <span class="text-lg font-bold text-white">Transparent Laden</span>
                     </div>
-                    <p class="text-sm">Faire und nachvollziehbare Preise beim Laden von Elektrofahrzeugen.</p>
+                    <p class="text-sm">Vollständige Preistransparenz beim Laden von Elektrofahrzeugen – in Prozent, vor Ladebeginn.</p>
                 </div>
                 <div>
                     <h3 class="text-white font-semibold mb-3">Produkt</h3>
                     <ul class="space-y-2 text-sm">
                         <li><a href="/transparenz" class="hover:text-white transition">Transparenz</a></li>
-                        <li><a href="/preise" class="hover:text-white transition">Preise & Abos</a></li>
+                        <li><a href="/preise" class="hover:text-white transition">Preise</a></li>
                         <li><a href="/faq" class="hover:text-white transition">FAQ</a></li>
                     </ul>
                 </div>

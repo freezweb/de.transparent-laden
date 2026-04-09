@@ -1,6 +1,6 @@
 <?php
 $title = 'Startseite';
-$description = 'Transparent Laden - Faire und nachvollziehbare Preise beim Laden von Elektrofahrzeugen.';
+$description = 'Transparent Laden – Sehen Sie vor jedem Ladevorgang, wie sich der Preis prozentual zusammensetzt. Vollständige Preistransparenz für Elektrofahrzeuge.';
 ob_start();
 ?>
 
@@ -13,14 +13,14 @@ ob_start();
         <div class="grid md:grid-cols-2 gap-12 items-center">
             <div class="fade-in">
                 <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
-                    Laden mit <span class="text-primary-200">voller Transparenz</span>
+                    Wissen, <span class="text-primary-200">woraus</span> sich Ihr Ladepreis zusammensetzt
                 </h1>
                 <p class="text-lg md:text-xl text-primary-100 mb-8 leading-relaxed">
-                    Wissen, was Sie zahlen - bevor Sie laden. Faire Preise, nachvollziehbare Kosten, keine versteckten Gebühren.
+                    Andere Apps zeigen Ihnen einen Endpreis. Wir zeigen Ihnen zusätzlich, wie sich dieser Preis prozentual zusammensetzt – inklusive Betreiberkosten, Roaming, Zahlungsabwicklung und unserer Marge. Alles sichtbar vor Ladebeginn.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4">
                     <a href="/portal#/register" class="bg-white text-primary-800 px-8 py-3 rounded-lg font-semibold hover:bg-primary-50 transition text-center shadow-lg">
-                        Jetzt starten
+                        Jetzt starten – 9,99 €/Monat
                     </a>
                     <a href="/transparenz" class="border-2 border-white/30 text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/10 transition text-center">
                         So funktioniert's
@@ -29,22 +29,58 @@ ob_start();
             </div>
             <div class="hidden md:flex justify-center">
                 <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 shadow-2xl max-w-sm w-full">
-                    <div class="text-center mb-6">
+                    <div class="text-center mb-5">
                         <div class="w-16 h-16 bg-primary-500 rounded-full mx-auto mb-4 flex items-center justify-center">
                             <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                         </div>
-                        <p class="text-primary-200 text-sm">Aktuelle Ladung</p>
+                        <p class="text-primary-200 text-sm font-medium">Preisaufschlüsselung vor Ladebeginn</p>
                     </div>
-                    <div class="space-y-3">
-                        <div class="flex justify-between"><span class="text-primary-200">Energie</span><span class="font-mono font-bold">23.4 kWh</span></div>
-                        <div class="flex justify-between"><span class="text-primary-200">Preis/kWh</span><span class="font-mono font-bold">0.39 &euro;</span></div>
-                        <div class="flex justify-between"><span class="text-primary-200">Blockiergebühr</span><span class="font-mono font-bold">0.00 &euro;</span></div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between"><span class="text-primary-200">Betreiber / Infrastruktur</span><span class="font-mono font-bold">62 %</span></div>
+                        <div class="flex justify-between"><span class="text-primary-200">Roaming / Betrieb</span><span class="font-mono font-bold">18 %</span></div>
+                        <div class="flex justify-between"><span class="text-primary-200">Zahlungsabwicklung</span><span class="font-mono font-bold">4 %</span></div>
+                        <div class="flex justify-between"><span class="text-primary-200">Unsere Marge</span><span class="font-mono font-bold">3 %</span></div>
+                        <div class="flex justify-between"><span class="text-primary-200">Steuern & Abgaben</span><span class="font-mono font-bold">13 %</span></div>
                         <hr class="border-white/20">
-                        <div class="flex justify-between text-lg"><span class="font-semibold">Gesamt</span><span class="font-mono font-bold">9.13 &euro;</span></div>
+                        <div class="flex justify-between text-base"><span class="font-semibold">Endpreis</span><span class="font-mono font-bold">0,49 &euro;/kWh</span></div>
+                        <div class="flex justify-between text-xs text-primary-300"><span>zzgl. Startgebühr (Betreiber)</span><span>0,35 &euro;</span></div>
                     </div>
                     <div class="mt-4 bg-primary-500/30 rounded-lg p-3 text-xs text-primary-100 text-center">
-                        Alle Preisbestandteile jederzeit einsehbar
+                        Alle Bestandteile in % sichtbar – vor Ladebeginn
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- USP / Differenzierung -->
+<section class="py-16 bg-white border-b">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Der Unterschied zu anderen Lade‑Apps</h2>
+            <p class="text-lg text-gray-600 max-w-3xl mx-auto">Fast jede App zeigt Ihnen einen Endpreis pro kWh. Aber nur Transparent Laden zeigt Ihnen, <strong>woraus</strong> dieser Preis besteht.</p>
+        </div>
+        <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <div class="bg-gray-100 rounded-xl p-6 border-2 border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-500 mb-4">Andere Lade-Apps</h3>
+                <div class="bg-white rounded-lg p-4 border text-center">
+                    <div class="text-3xl font-bold text-gray-800">0,49 &euro;/kWh</div>
+                    <div class="text-sm text-gray-400 mt-2">Das war's. Keine weiteren Informationen.</div>
+                </div>
+            </div>
+            <div class="bg-primary-50 rounded-xl p-6 border-2 border-primary-300">
+                <h3 class="text-lg font-semibold text-primary-800 mb-4">Transparent Laden</h3>
+                <div class="bg-white rounded-lg p-4 border border-primary-200 space-y-1.5 text-sm">
+                    <div class="flex justify-between"><span class="text-gray-600">Betreiber / Infrastruktur</span><span class="font-semibold">62 %</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Roaming / Betrieb</span><span class="font-semibold">18 %</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Zahlungsabwicklung (PayPal)</span><span class="font-semibold">4 %</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Unsere Marge</span><span class="font-semibold">3 %</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Steuern & Abgaben</span><span class="font-semibold">13 %</span></div>
+                    <hr>
+                    <div class="flex justify-between font-bold text-primary-800"><span>Endpreis</span><span>0,49 &euro;/kWh</span></div>
+                    <div class="flex justify-between text-xs text-gray-500"><span>Startgebühr (Betreiber)</span><span>0,35 &euro;</span></div>
+                    <div class="flex justify-between text-xs text-gray-500"><span>davon Zahlungsart-Transaktionsgebühr</span><span>0,35 &euro;</span></div>
                 </div>
             </div>
         </div>
@@ -55,30 +91,30 @@ ob_start();
 <section class="py-20 bg-white">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-16">
-            <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Warum Transparent Laden?</h2>
-            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Wir glauben, dass faire Preise und Nachvollziehbarkeit die Grundlage für Vertrauen sind.</p>
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Was uns ausmacht</h2>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Preistransparenz ist kein Feature – es ist unser Geschäftsmodell.</p>
         </div>
         <div class="grid md:grid-cols-3 gap-8">
             <div class="bg-gray-50 rounded-xl p-8 hover:shadow-lg transition">
                 <div class="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-5">
                     <svg class="w-6 h-6 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </div>
-                <h3 class="text-xl font-semibold mb-3">Volle Preistransparenz</h3>
-                <p class="text-gray-600">Jeder Preisbestandteil wird offen dargestellt - Energiekosten, Netzentgelte, Steuern und Marge. Keine versteckten Aufschläge.</p>
+                <h3 class="text-xl font-semibold mb-3">Prozentuale Aufschlüsselung</h3>
+                <p class="text-gray-600">Sehen Sie vor Ladebeginn, welcher Anteil an den Betreiber, ans Roaming, an die Zahlungsabwicklung und an uns geht – in Prozent.</p>
             </div>
             <div class="bg-gray-50 rounded-xl p-8 hover:shadow-lg transition">
                 <div class="w-12 h-12 bg-accent-100 rounded-lg flex items-center justify-center mb-5">
                     <svg class="w-6 h-6 text-accent-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </div>
-                <h3 class="text-xl font-semibold mb-3">Faire Abrechnung</h3>
-                <p class="text-gray-600">Bezahlen Sie nur, was Sie verbrauchen. Kein Minutentakt-Trick, keine überhöhten Startgebühren. Echte kWh-basierte Abrechnung.</p>
+                <h3 class="text-xl font-semibold mb-3">Alle Kosten sichtbar</h3>
+                <p class="text-gray-600">Startgebühren, Minutenpreise, Blockiergebühren – wenn der Betreiber sie erhebt, zeigen wir sie Ihnen klar an, bevor Sie laden.</p>
             </div>
             <div class="bg-gray-50 rounded-xl p-8 hover:shadow-lg transition">
                 <div class="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-5">
-                    <svg class="w-6 h-6 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <svg class="w-6 h-6 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                 </div>
-                <h3 class="text-xl font-semibold mb-3">Europaweites Netz</h3>
-                <p class="text-gray-600">Zugang zu tausenden Ladepunkten verschiedener Anbieter - immer mit dem gleichen transparenten Preismodell.</p>
+                <h3 class="text-xl font-semibold mb-3">Zahlungsart-Transparenz</h3>
+                <p class="text-gray-600">Ihre Zahlungsart beeinflusst den Preis. Wir zeigen Ihnen vor Ladebeginn, welche Kosten Ihre gewählte Zahlungsart verursacht.</p>
             </div>
         </div>
     </div>
@@ -93,18 +129,18 @@ ob_start();
         <div class="grid md:grid-cols-3 gap-8">
             <div class="text-center">
                 <div class="w-16 h-16 bg-primary-700 text-white rounded-full mx-auto mb-6 flex items-center justify-center text-2xl font-bold">1</div>
-                <h3 class="text-xl font-semibold mb-3">App laden & registrieren</h3>
-                <p class="text-gray-600">Erstellen Sie Ihr Konto in Sekunden. Keine versteckten Pflichtangaben.</p>
+                <h3 class="text-xl font-semibold mb-3">Registrieren</h3>
+                <p class="text-gray-600">Konto erstellen und Zahlungsart hinterlegen. Ein Tarif, klar und einfach: 9,99 €/Monat.</p>
             </div>
             <div class="text-center">
                 <div class="w-16 h-16 bg-primary-700 text-white rounded-full mx-auto mb-6 flex items-center justify-center text-2xl font-bold">2</div>
-                <h3 class="text-xl font-semibold mb-3">Ladepunkt finden</h3>
-                <p class="text-gray-600">Sehen Sie vorab den exakten Preis pro kWh - aufgeschlüsselt und verständlich.</p>
+                <h3 class="text-xl font-semibold mb-3">Ladestation auswählen</h3>
+                <p class="text-gray-600">Sehen Sie vorab die vollständige Preiszusammensetzung in Prozent – inklusive aller Gebühren des Betreibers und Ihrer Zahlungsart.</p>
             </div>
             <div class="text-center">
                 <div class="w-16 h-16 bg-primary-700 text-white rounded-full mx-auto mb-6 flex items-center justify-center text-2xl font-bold">3</div>
-                <h3 class="text-xl font-semibold mb-3">Laden & fair bezahlen</h3>
-                <p class="text-gray-600">Laden Sie Ihr Fahrzeug und erhalten Sie eine transparente Rechnung mit allen Details.</p>
+                <h3 class="text-xl font-semibold mb-3">Laden & nachvollziehen</h3>
+                <p class="text-gray-600">Laden Sie Ihr Fahrzeug. Die Kostenentwicklung ist live nachvollziehbar, die Rechnung vollständig aufgeschlüsselt.</p>
             </div>
         </div>
     </div>
@@ -113,11 +149,11 @@ ob_start();
 <!-- CTA -->
 <section class="py-20 bg-primary-800 text-white">
     <div class="max-w-4xl mx-auto px-4 text-center">
-        <h2 class="text-3xl md:text-4xl font-bold mb-6">Bereit für transparentes Laden?</h2>
-        <p class="text-lg text-primary-100 mb-8">Starten Sie jetzt und erleben Sie, wie einfach und fair E-Mobilität sein kann.</p>
+        <h2 class="text-3xl md:text-4xl font-bold mb-6">Preistransparenz, die es so noch nicht gab</h2>
+        <p class="text-lg text-primary-100 mb-8">Ein Tarif. 9,99 €/Monat. Dafür sehen Sie bei jedem Ladevorgang, wie sich der Preis zusammensetzt – in Prozent, vor Ladebeginn.</p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="/portal#/register" class="bg-white text-primary-800 px-8 py-3 rounded-lg font-semibold hover:bg-primary-50 transition shadow-lg">Kostenlos registrieren</a>
-            <a href="/preise" class="border-2 border-white/30 px-8 py-3 rounded-lg font-semibold hover:bg-white/10 transition">Preise ansehen</a>
+            <a href="/portal#/register" class="bg-white text-primary-800 px-8 py-3 rounded-lg font-semibold hover:bg-primary-50 transition shadow-lg">Jetzt registrieren</a>
+            <a href="/transparenz" class="border-2 border-white/30 px-8 py-3 rounded-lg font-semibold hover:bg-white/10 transition">Transparenz-Modell ansehen</a>
         </div>
     </div>
 </section>

@@ -328,8 +328,8 @@
                     <div class="bg-white rounded-xl shadow-sm border p-6 mb-6 max-w-lg">
                         <div class="flex justify-between items-start">
                             <div>
-                                <h2 class="text-xl font-bold" x-text="subscription.plan_name"></h2>
-                                <p class="text-sm text-gray-500 mt-1" x-text="subscription.billing_cycle==='monthly'?'Monatlich':'Jährlich'"></p>
+                                <h2 class="text-xl font-bold">Transparent Laden</h2>
+                                <p class="text-sm text-gray-500 mt-1">9,99 &euro;/Monat – monatlich kündbar</p>
                             </div>
                             <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium" x-text="subscription.status"></span>
                         </div>
@@ -339,27 +339,39 @@
                         <button @click="cancelSubscription()" class="mt-4 text-red-600 text-sm hover:underline">Abo kündigen</button>
                     </div>
                 </template>
-                <!-- Available plans -->
-                <h2 class="text-lg font-semibold text-gray-900 mb-4">Verfügbare Tarife</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <template x-for="plan in plans" :key="plan.id">
-                        <div class="bg-white rounded-xl shadow-sm border p-6 flex flex-col">
-                            <h3 class="text-lg font-bold" x-text="plan.name"></h3>
-                            <p class="text-sm text-gray-500 mt-1" x-text="plan.description"></p>
-                            <div class="mt-4 text-3xl font-bold" x-text="formatCurrency(plan.current_version?.monthly_price||0)"></div>
-                            <span class="text-sm text-gray-500">/Monat</span>
-                            <ul class="mt-4 space-y-2 flex-1">
-                                <template x-for="f in (plan.current_version?.features||[])" :key="f">
-                                    <li class="text-sm text-gray-600 flex items-center gap-2">
-                                        <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                        <span x-text="f"></span>
-                                    </li>
-                                </template>
+                <!-- Single plan info -->
+                <template x-if="!subscription">
+                    <div class="max-w-lg">
+                        <div class="bg-white rounded-xl shadow-sm border p-6">
+                            <h2 class="text-xl font-bold mb-2">Transparent Laden</h2>
+                            <div class="text-3xl font-bold">9,99 &euro;<span class="text-sm font-normal text-gray-500">/Monat</span></div>
+                            <p class="text-sm text-gray-500 mt-1 mb-4">Monatlich kündbar</p>
+                            <ul class="space-y-2 mb-6">
+                                <li class="text-sm text-gray-600 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Prozentuale Preisaufschlüsselung vor jedem Ladevorgang
+                                </li>
+                                <li class="text-sm text-gray-600 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Marge offen ausgewiesen
+                                </li>
+                                <li class="text-sm text-gray-600 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Betreiber-Gebühren transparent angezeigt
+                                </li>
+                                <li class="text-sm text-gray-600 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Zahlungsart-Kosten sichtbar
+                                </li>
+                                <li class="text-sm text-gray-600 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Zugang zum europaweiten Ladenetzwerk
+                                </li>
                             </ul>
-                            <button @click="subscribe(plan.id,'monthly')" class="mt-4 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 text-sm font-medium">Auswählen</button>
+                            <button @click="subscribe(plans[0]?.id||1,'monthly')" class="w-full bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 text-sm font-medium">Jetzt abonnieren</button>
                         </div>
-                    </template>
-                </div>
+                    </div>
+                </template>
             </div>
 
             <!-- Devices / Push-Geräte -->

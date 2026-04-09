@@ -1,5 +1,6 @@
 <?php
 $title = 'Kontakt';
+$description = 'Kontaktieren Sie Transparent Laden – wir helfen Ihnen bei Fragen zu Ihrem Konto, Ladevorgängen oder unserem Transparenz-Modell.';
 ob_start();
 ?>
 <section class="py-16 bg-white">
@@ -57,5 +58,5 @@ ob_start();
 </section>
 <?php
 $content = ob_get_clean();
-echo view('layouts/public', ['title' => $title, 'content' => $content]);
+echo view('layouts/public', ['title' => $title, 'description' => $description, 'content' => $content]);
 ?>
