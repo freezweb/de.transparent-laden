@@ -139,7 +139,7 @@ class HomeScreen extends ConsumerWidget {
               Text(
                 'Finde einen Ladepunkt in deiner Nähe',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                  color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.8),
                 ),
               ),
             ],
@@ -184,7 +184,7 @@ class HomeScreen extends ConsumerWidget {
               Text(
                 'Tippen für Details',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onTertiaryContainer.withValues(alpha: 0.7),
+                  color: Theme.of(context).colorScheme.onTertiaryContainer.withOpacity(0.7),
                 ),
               ),
             ],

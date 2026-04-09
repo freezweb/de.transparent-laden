@@ -211,15 +211,16 @@ pipeline {
             steps {
                 dir('app') {
                     withCredentials([
-                        string(credentialsId: 'einfach-laden-keystore-password', variable: 'KEYSTORE_PASSWORD'),
-                        string(credentialsId: 'einfach-laden-key-alias', variable: 'KEY_ALIAS'),
-                        string(credentialsId: 'einfach-laden-key-password', variable: 'KEY_PASSWORD')
+                        string(credentialsId: 'keystore-password', variable: 'KEYSTORE_PASSWORD'),
+                        string(credentialsId: 'key-alias', variable: 'KEY_ALIAS'),
+                        string(credentialsId: 'key-password', variable: 'KEY_PASSWORD')
                     ]) {
                         bat """
-                            echo storePassword=%KEYSTORE_PASSWORD%> android\\key.properties
-                            echo keyPassword=%KEY_PASSWORD%>> android\\key.properties
-                            echo keyAlias=%KEY_ALIAS%>> android\\key.properties
-                            echo storeFile=%WORKSPACE%\\einfach-laden-release.keystore>> android\\key.properties
+                            set KEYSTORE_FILE=%WORKSPACE%\\einfach-laden-release.keystore
+                            echo ========================================
+                            echo Release Build
+                            echo Keystore: einfach-laden-release.keystore
+                            echo ========================================
 
                             flutter build apk --release --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%
                         """
@@ -229,10 +230,6 @@ pipeline {
             post {
                 success {
                     archiveArtifacts artifacts: 'app/build/app/outputs/flutter-apk/app-release.apk', fingerprint: true, allowEmptyArchive: true
-                }
-                always {
-                    // key.properties nach Build entfernen
-                    bat 'del /q app\\android\\key.properties 2>nul'
                 }
             }
         }

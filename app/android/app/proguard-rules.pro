@@ -15,3 +15,6 @@
 -keepattributes Signature
 -keepattributes *Annotation*
 -keep class sun.misc.Unsafe { *; }
+
+# Play Core (deferred components)
+-dontwarn com.google.android.play.core.**

@@ -8,7 +8,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Release Signing aus key.properties laden
+// Release Signing - unterstützt key.properties (lokal) und Env-Variablen (Jenkins)
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
@@ -40,12 +40,27 @@ android {
     }
 
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
-            create("release") {
+        create("release") {
+            // Jenkins: Env-Variablen von withCredentials
+            val envKeystorePassword = System.getenv("KEYSTORE_PASSWORD")
+            val envKeyAlias = System.getenv("KEY_ALIAS")
+            val envKeyPassword = System.getenv("KEY_PASSWORD")
+            val envKeystoreFile = System.getenv("KEYSTORE_FILE")
+
+            if (envKeystoreFile != null && File(envKeystoreFile).exists()) {
+                // Jenkins-Modus: Keystore aus Env
+                storeFile = File(envKeystoreFile)
+                storePassword = envKeystorePassword
+                keyAlias = envKeyAlias
+                keyPassword = envKeyPassword
+                println("✓ Using Release Keystore: $envKeystoreFile")
+            } else if (keystorePropertiesFile.exists()) {
+                // Lokaler Modus: key.properties
                 keyAlias = keystoreProperties["keyAlias"] as String?
                 keyPassword = keystoreProperties["keyPassword"] as String?
                 storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
                 storePassword = keystoreProperties["storePassword"] as String?
+                println("✓ Using Release Keystore from key.properties")
             }
         }
     }
@@ -55,7 +70,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = if (keystorePropertiesFile.exists()) {
+
+            val hasEnvKeystore = System.getenv("KEYSTORE_FILE") != null
+            val hasLocalKeystore = keystorePropertiesFile.exists()
+            signingConfig = if (hasEnvKeystore || hasLocalKeystore) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")

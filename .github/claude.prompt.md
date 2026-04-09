@@ -8,6 +8,8 @@ das verzeichnis auf dem server ist /srv/www/git/de.einfach-laden
 hier kann auch ein git pull ausgefürt werden zum schnelleren einspielens
 
 
+google maps api key AIzaSyBDaLPv2eEgk5lWNrJ6H-i9pmb6thGASOI
+
 Datenbank:
 mariadb auf dem Webserver localhost
 datenbank: 0einfach_laden

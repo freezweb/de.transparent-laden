@@ -15,7 +15,7 @@ dependencies:
 
   # State Management
   flutter_riverpod: ^2.6.1
-  riverpod_annotation: ^2.6.1
+  riverpod_annotation: ^2.3.5
 
   # Navigation
   go_router: ^14.8.1
@@ -28,7 +28,7 @@ dependencies:
   shared_preferences: ^2.5.3
 
   # Maps
-  google_maps_flutter: ^2.12.1
+  google_maps_flutter: ^2.10.0
   geolocator: ^13.0.2
 
   # UI
@@ -38,9 +38,9 @@ dependencies:
   flutter_svg: ^2.0.17
 
   # Utilities
-  intl: ^0.20.2
+  intl: any
   json_annotation: ^4.9.0
-  freezed_annotation: ^3.0.0
+  freezed_annotation: ^2.4.4
   url_launcher: ^6.3.1
 
   # Push Notifications
@@ -48,16 +48,16 @@ dependencies:
   firebase_messaging: ^15.2.4
 
   # QR
-  mobile_scanner: ^7.2.0
+  mobile_scanner: ^6.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  build_runner: ^2.4.15
-  json_serializable: ^6.9.5
-  freezed: ^3.0.6
-  riverpod_generator: ^2.6.5
+  build_runner: ^2.4.13
+  json_serializable: ^6.8.0
+  freezed: ^2.5.7
+  riverpod_generator: ^2.4.3
 
 flutter:
   uses-material-design: true
