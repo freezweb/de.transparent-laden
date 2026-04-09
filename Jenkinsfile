@@ -216,11 +216,18 @@ pipeline {
                         string(credentialsId: 'key-password', variable: 'KEY_PASSWORD')
                     ]) {
                         bat """
+                            @echo off
                             set KEYSTORE_FILE=%WORKSPACE%\\einfach-laden-release.keystore
                             echo ========================================
-                            echo Release Build
-                            echo Keystore: einfach-laden-release.keystore
+                            echo Release Build mit autorisiertem Keystore
+                            echo KEYSTORE_FILE=%KEYSTORE_FILE%
                             echo ========================================
+
+                            if not exist "%KEYSTORE_FILE%" (
+                                echo FEHLER: Autorisierter Keystore nicht gefunden: %KEYSTORE_FILE%
+                                echo Der Keystore muss manuell auf dem Jenkins-Agent platziert werden.
+                                exit /b 1
+                            )
 
                             flutter build apk --release --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%
                         """

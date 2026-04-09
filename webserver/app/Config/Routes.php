@@ -6,6 +6,20 @@ use CodeIgniter\Router\RouteCollection;
  * @var RouteCollection $routes
  */
 $routes->get('/', 'Home::index');
+$routes->get('preise', 'Home::pricing');
+$routes->get('transparenz', 'Home::transparency');
+$routes->get('faq', 'Home::faq');
+$routes->get('kontakt', 'Home::contact');
+$routes->get('impressum', 'Home::imprint');
+$routes->get('datenschutz', 'Home::privacy');
+
+// Kundenportal SPA
+$routes->get('portal', 'PortalController::index');
+$routes->get('portal/(:any)', 'PortalController::index');
+
+// Admin/Support SPA
+$routes->get('admin', 'AdminWebController::index');
+$routes->get('admin/(:any)', 'AdminWebController::index');
 
 // ──────────────────────────────────────────────
 // API v1 Routes
