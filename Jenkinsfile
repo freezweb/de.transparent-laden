@@ -69,19 +69,10 @@ pipeline {
                 bat '''
                     @echo off
                     if not exist "%ANDROID_HOME%\\licenses" mkdir "%ANDROID_HOME%\\licenses"
-
-                    set "SDKMANAGER_PATH="
-                    if exist "%ANDROID_HOME%\\cmdline-tools\\latest\\bin\\sdkmanager.bat" (
-                        set "SDKMANAGER_PATH=%ANDROID_HOME%\\cmdline-tools\\latest\\bin\\sdkmanager.bat"
-                    )
-                    if defined SDKMANAGER_PATH (
-                        (echo y&echo y&echo y&echo y&echo y&echo y&echo y&echo y&echo y&echo y) | "%SDKMANAGER_PATH%" --licenses || echo Licenses done
-                    ) else (
-                        echo 24333f8a63b6825ea9c5514f83c2829b004d1fee > "%ANDROID_HOME%\\licenses\\android-sdk-license"
-                        echo d56f5187479451eabf01fb78af6dfcb131a6481e > "%ANDROID_HOME%\\licenses\\android-sdk-preview-license"
-                        echo 8933bad161af4178b1185d1a37fbf41ea5269c55 > "%ANDROID_HOME%\\licenses\\android-ndk-license"
-                        echo Licenses created manually
-                    )
+                    echo 24333f8a63b6825ea9c5514f83c2829b004d1fee > "%ANDROID_HOME%\\licenses\\android-sdk-license"
+                    echo d56f5187479451eabf01fb78af6dfcb131a6481e > "%ANDROID_HOME%\\licenses\\android-sdk-preview-license"
+                    echo 8933bad161af4178b1185d1a37fbf41ea5269c55 > "%ANDROID_HOME%\\licenses\\android-ndk-license"
+                    echo Android Licenses erstellt
                 '''
             }
         }
@@ -90,41 +81,15 @@ pipeline {
         // BACKEND STAGES
         // ============================================================
 
-        stage('Backend: Composer Install') {
+        stage('Backend: Lint & Test (Remote)') {
             when {
                 expression { return params.DEPLOY_BACKEND }
             }
             steps {
-                dir('webserver') {
-                    bat 'composer install --no-dev --optimize-autoloader --no-interaction'
-                }
-            }
-        }
-
-        stage('Backend: PHP Lint') {
-            when {
-                expression { return params.DEPLOY_BACKEND }
-            }
-            steps {
-                dir('webserver') {
-                    bat '''
-                        @echo off
-                        setlocal enabledelayedexpansion
-                        set ERRORS=0
-                        for /r app %%f in (*.php) do (
-                            php -l "%%f" > nul 2>&1
-                            if errorlevel 1 (
-                                echo FEHLER: %%f
-                                set /a ERRORS+=1
-                            )
-                        )
-                        if !ERRORS! gtr 0 (
-                            echo %ERRORS% PHP Dateien mit Fehlern gefunden!
-                            exit /b 1
-                        )
-                        echo Alle PHP-Dateien fehlerfrei
-                    '''
-                }
+                bat '''
+                    echo PHP Lint auf Server ausfuehren...
+                    "C:\\key\\plink.exe" -i "C:\\key\\key\\private.ppk" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden/webserver && find app -name '*.php' -exec php -l {} \\; 2>&1 | grep -i error && echo PHP LINT FEHLER GEFUNDEN && exit 1 || echo Alle PHP-Dateien fehlerfrei"
+                '''
             }
         }
 
@@ -309,14 +274,10 @@ pipeline {
     post {
         success {
             script {
-                def message = "Einfach Laden - Build Erfolgreich\n\nBuild: #${env.BUILD_NUMBER}\nVersion: 1.0.${env.BUILD_NUMBER}\nBranch: ${env.GIT_BRANCH_NAME}\nCommit: ${env.GIT_COMMIT_SHORT}\nDauer: ${currentBuild.durationString}"
-
-                powershell """
-                    \$body = @{
-                        chat_id = '${env.TELEGRAM_CHAT_ID}'
-                        text = '${message}'
-                    }
-                    Invoke-RestMethod -Uri 'https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage' -Method Post -Body \$body -ContentType 'application/x-www-form-urlencoded; charset=utf-8'
+                bat """
+                    curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendMessage" ^
+                        -d "chat_id=%TELEGRAM_CHAT_ID%" ^
+                        -d "text=Einfach Laden - Build Erfolgreich%%0A%%0ABuild: #${env.BUILD_NUMBER}%%0AVersion: 1.0.${env.BUILD_NUMBER}%%0ABranch: ${env.GIT_BRANCH_NAME}%%0ACommit: ${env.GIT_COMMIT_SHORT}"
                 """
             }
 
@@ -334,14 +295,10 @@ pipeline {
 
         failure {
             script {
-                def message = "Einfach Laden - Build FEHLGESCHLAGEN\n\nBuild: #${env.BUILD_NUMBER}\nBranch: ${env.GIT_BRANCH_NAME}\nCommit: ${env.GIT_COMMIT_SHORT}\nDauer: ${currentBuild.durationString}\n\nBitte Jenkins-Log pruefen"
-
-                powershell """
-                    \$body = @{
-                        chat_id = '${env.TELEGRAM_CHAT_ID}'
-                        text = '${message}'
-                    }
-                    Invoke-RestMethod -Uri 'https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage' -Method Post -Body \$body -ContentType 'application/x-www-form-urlencoded; charset=utf-8'
+                bat """
+                    curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendMessage" ^
+                        -d "chat_id=%TELEGRAM_CHAT_ID%" ^
+                        -d "text=Einfach Laden - Build FEHLGESCHLAGEN%%0A%%0ABuild: #${env.BUILD_NUMBER}%%0ABranch: ${env.GIT_BRANCH_NAME}%%0ACommit: ${env.GIT_COMMIT_SHORT}%%0A%%0ABitte Jenkins-Log pruefen"
                 """
             }
         }
