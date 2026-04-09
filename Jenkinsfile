@@ -37,42 +37,56 @@ pipeline {
                 checkout scm
                 script {
                     env.GIT_COMMIT_SHORT = bat(returnStdout: true, script: '@git rev-parse --short HEAD').trim()
-                    env.GIT_BRANCH_NAME = bat(returnStdout: true, script: '@git rev-parse --abbrev-ref HEAD').trim()
-                    echo "Building commit ${env.GIT_COMMIT_SHORT} on branch ${env.GIT_BRANCH_NAME}"
+                    // GIT_BRANCH von Jenkins SCM Plugin = "origin/main" -> nur Branch-Name extrahieren
+                    def rawBranch = env.GIT_BRANCH ?: bat(returnStdout: true, script: '@git rev-parse --abbrev-ref HEAD').trim()
+                    env.GIT_BRANCH_NAME = rawBranch.replaceAll('^origin/', '')
+                    env.IS_MAIN = (env.GIT_BRANCH_NAME == 'main') ? 'true' : 'false'
+
+                    // Tool-Verfuegbarkeit pruefen
+                    env.HAS_FLUTTER = fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") ? 'true' : 'false'
+                    env.HAS_PLINK = fileExists(env.PLINK_EXE) ? 'true' : 'false'
+
+                    // Params null-safe (erster Build nach Parameteraenderung liefert null)
+                    env.DO_DEPLOY  = (params.DEPLOY_BACKEND != false) ? 'true' : 'false'
+                    env.DO_APK     = (params.BUILD_APK != false) ? 'true' : 'false'
+                    env.DO_TELEGRAM = (params.SEND_TELEGRAM != false) ? 'true' : 'false'
+                    env.DO_TESTS   = (params.SKIP_TESTS == false) ? 'true' : 'false'
+
+                    echo """
+                        ========================================
+                        Build Info
+                        ========================================
+                        Commit:      ${env.GIT_COMMIT_SHORT}
+                        Branch:      ${env.GIT_BRANCH_NAME}
+                        Is Main:     ${env.IS_MAIN}
+                        Flutter:     ${env.HAS_FLUTTER}
+                        Plink/SSH:   ${env.HAS_PLINK}
+                        Deploy:      ${env.DO_DEPLOY}
+                        Build APK:   ${env.DO_APK}
+                        Telegram:    ${env.DO_TELEGRAM}
+                        Run Tests:   ${env.DO_TESTS}
+                        ========================================
+                    """.stripIndent()
                 }
             }
         }
 
         stage('Setup Environment') {
             steps {
-                script {
-                    env.HAS_FLUTTER = fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") ? 'true' : 'false'
-                    env.HAS_PLINK = fileExists(env.PLINK_EXE) ? 'true' : 'false'
-                }
                 bat '''
+                    @echo off
                     echo ========================================
-                    echo Environment Setup
+                    echo Environment Check
                     echo ========================================
-                    echo JAVA_HOME: %JAVA_HOME%
-                    echo ANDROID_HOME: %ANDROID_HOME%
-                    echo FLUTTER_HOME: %FLUTTER_HOME%
-                    echo VERSION_CODE: %VERSION_CODE%
-                    echo.
-                    echo Tool-Verfuegbarkeit:
-                    echo   Flutter: %HAS_FLUTTER%
-                    echo   Plink/SSH: %HAS_PLINK%
-                    echo.
-                    java -version
+                    java -version 2>&1
                     echo.
                     if exist "%FLUTTER_HOME%\\bin\\flutter.bat" (
-                        flutter --version
+                        call flutter --version
                     ) else (
                         echo WARNUNG: Flutter nicht gefunden unter %FLUTTER_HOME%
-                        echo   -> Flutter-Stages werden uebersprungen
                     )
                     if not exist "%PLINK_EXE%" (
                         echo WARNUNG: plink.exe nicht gefunden unter %PLINK_EXE%
-                        echo   -> SSH/Deploy-Stages werden uebersprungen
                     )
                     echo ========================================
                 '''
@@ -80,6 +94,7 @@ pipeline {
         }
 
         stage('Accept Android Licenses') {
+            when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' } }
             steps {
                 bat '''
                     @echo off
@@ -97,9 +112,7 @@ pipeline {
         // ============================================================
 
         stage('Backend: Lint & Test (Remote)') {
-            when {
-                expression { return params.DEPLOY_BACKEND && fileExists(env.PLINK_EXE) }
-            }
+            when { expression { env.DO_DEPLOY == 'true' && env.HAS_PLINK == 'true' } }
             steps {
                 bat '''
                     echo PHP Lint auf Server ausfuehren...
@@ -109,34 +122,21 @@ pipeline {
         }
 
         stage('Backend: Deploy to Server') {
-            when {
-                allOf {
-                    expression { return params.DEPLOY_BACKEND && fileExists(env.PLINK_EXE) }
-                    branch 'main'
-                }
-            }
+            when { expression { env.DO_DEPLOY == 'true' && env.HAS_PLINK == 'true' && env.IS_MAIN == 'true' } }
             steps {
-                script {
-                    echo 'Deploying backend to profipos.de...'
-                    bat '''
-                        echo Deploying backend...
-                        "%PLINK_EXE%" -i "%PLINK_KEY%" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden && git pull origin main && cd webserver && composer install --no-dev --optimize-autoloader --no-interaction && php spark migrate --all && echo Deploy erfolgreich"
-                    '''
-                }
+                echo 'Deploying backend to profipos.de...'
+                bat '''
+                    "%PLINK_EXE%" -i "%PLINK_KEY%" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden && git pull origin main && cd webserver && composer install --no-dev --optimize-autoloader --no-interaction && php spark migrate --all && echo Deploy erfolgreich"
+                '''
             }
         }
 
         stage('Backend: Smoke Test') {
-            when {
-                allOf {
-                    expression { return params.DEPLOY_BACKEND }
-                    branch 'main'
-                }
-            }
+            when { expression { env.DO_DEPLOY == 'true' && env.IS_MAIN == 'true' } }
             steps {
                 bat '''
                     echo Smoke Test...
-                    curl -s -o nul -w "HTTP Status: %%{http_code}" https://transparent-laden.de/api/v1/health
+                    curl -sf -o nul -w "HTTP Status: %%{http_code}" https://transparent-laden.de/api/v1/health
                     echo.
                 '''
             }
@@ -147,9 +147,7 @@ pipeline {
         // ============================================================
 
         stage('Flutter: Pub Get') {
-            when {
-                expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
-            }
+            when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' } }
             steps {
                 dir('app') {
                     bat 'flutter pub get'
@@ -158,9 +156,7 @@ pipeline {
         }
 
         stage('Flutter: Analyze') {
-            when {
-                expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
-            }
+            when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' } }
             steps {
                 dir('app') {
                     bat 'flutter analyze --no-fatal-infos || echo Analyze done with warnings'
@@ -169,12 +165,7 @@ pipeline {
         }
 
         stage('Flutter: Test') {
-            when {
-                allOf {
-                    expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
-                    expression { return !params.SKIP_TESTS }
-                }
-            }
+            when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.DO_TESTS == 'true' } }
             steps {
                 dir('app') {
                     bat 'flutter test'
@@ -183,12 +174,7 @@ pipeline {
         }
 
         stage('Flutter: Build Debug APK') {
-            when {
-                allOf {
-                    expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
-                    not { branch 'main' }
-                }
-            }
+            when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.IS_MAIN != 'true' } }
             steps {
                 dir('app') {
                     bat "flutter build apk --debug --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%"
@@ -202,12 +188,7 @@ pipeline {
         }
 
         stage('Flutter: Build Release APK') {
-            when {
-                allOf {
-                    expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
-                    branch 'main'
-                }
-            }
+            when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.IS_MAIN == 'true' } }
             steps {
                 dir('app') {
                     withCredentials([
@@ -242,30 +223,25 @@ pipeline {
         }
 
         stage('Send APK to Telegram') {
-            when {
-                allOf {
-                    expression { return params.BUILD_APK && fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") }
-                    expression { return params.SEND_TELEGRAM }
-                }
-            }
+            when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.DO_TELEGRAM == 'true' } }
             steps {
                 script {
-                    def apkType = env.GIT_BRANCH_NAME == 'main' ? 'release' : 'debug'
+                    def apkType = env.IS_MAIN == 'true' ? 'release' : 'debug'
                     def apkPath = "app\\build\\app\\outputs\\flutter-apk\\app-${apkType}.apk"
 
-                    bat """
-                        @echo off
-                        echo Sende APK per Telegram...
+                    if (fileExists(apkPath)) {
+                        bat """
+                            @echo off
+                            echo Sende APK per Telegram...
 
-                        curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendMessage" ^
-                            -d "chat_id=%TELEGRAM_CHAT_ID%" ^
-                            -d "text=Einfach Laden Build #${env.BUILD_NUMBER}%%0A%%0AVersion: 1.0.${env.BUILD_NUMBER}%%0ABranch: ${env.GIT_BRANCH_NAME}%%0ACommit: ${env.GIT_COMMIT_SHORT}%%0ATyp: ${apkType}%%0A%%0AAPK bereit zum Testen!"
-
-                        curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendDocument" ^
-                            -F "chat_id=%TELEGRAM_CHAT_ID%" ^
-                            -F "document=@${apkPath}" ^
-                            -F "caption=Einfach Laden v1.0.${env.BUILD_NUMBER} (${apkType})"
-                    """
+                            curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendDocument" ^
+                                -F "chat_id=%TELEGRAM_CHAT_ID%" ^
+                                -F "document=@${apkPath}" ^
+                                -F "caption=Einfach Laden v1.0.${env.BUILD_NUMBER} (${apkType}) - ${env.GIT_BRANCH_NAME}@${env.GIT_COMMIT_SHORT}"
+                        """
+                    } else {
+                        echo "Kein APK gefunden unter ${apkPath} - Telegram-Versand uebersprungen"
+                    }
                 }
             }
         }
@@ -275,12 +251,7 @@ pipeline {
         // ============================================================
 
         stage('Setup Cron Jobs') {
-            when {
-                allOf {
-                    expression { return params.DEPLOY_BACKEND && fileExists(env.PLINK_EXE) }
-                    branch 'main'
-                }
-            }
+            when { expression { env.DO_DEPLOY == 'true' && env.HAS_PLINK == 'true' && env.IS_MAIN == 'true' } }
             steps {
                 bat '''
                     echo Setting up cron jobs on server...
