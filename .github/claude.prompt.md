@@ -7,6 +7,13 @@ hier liegt plink "C:\key\plink.exe"
 das verzeichnis auf dem server ist /srv/www/git/de.einfach-laden
 hier kann auch ein git pull ausgefürt werden zum schnelleren einspielens
 
+
+Datenbank:
+mariadb auf dem Webserver localhost
+datenbank: 0einfach_laden
+benutzer: 0einfach_laden
+passwort: Kx9#mN2$pQwL7@vR5tY8jHbFd4gC
+
 es wird alles automatisiert auf dem jenkins gebaut hier ist eine standard jenkins restapi freigegeben. prüfe den status selbst mit diesen API daten
 Jenkins REST-API Key: 115f40ead502832c7408a0787172048ea3
 Jenkins benutzer freezweb
