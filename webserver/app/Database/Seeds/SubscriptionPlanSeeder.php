@@ -74,12 +74,15 @@ class SubscriptionPlanSeeder extends Seeder
             $planId = $this->db->table('subscription_plans')->insert($plan, true);
 
             $this->db->table('subscription_plan_versions')->insert([
-                'plan_id'    => $planId,
-                'version'    => 1,
-                'valid_from' => date('Y-m-d H:i:s'),
-                'valid_until' => null,
-                'snapshot_json' => json_encode($plan),
-                'created_at'   => date('Y-m-d H:i:s'),
+                'plan_id'                        => $planId,
+                'version'                        => 1,
+                'price_monthly_cent'             => $plan['price_monthly_cent'],
+                'price_yearly_cent'              => $plan['price_yearly_cent'],
+                'platform_fee_reduction_percent' => $plan['platform_fee_reduction_percent'],
+                'features_json'                  => $plan['features_json'],
+                'valid_from'                     => date('Y-m-d H:i:s'),
+                'valid_until'                    => null,
+                'created_at'                     => date('Y-m-d H:i:s'),
             ]);
         }
     }
