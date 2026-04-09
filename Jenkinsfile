@@ -18,7 +18,9 @@ pipeline {
         TELEGRAM_BOT_TOKEN = '7922836994:AAEGKibf1tchleSwLI4Ij5L0BHXUYLTyxSc'
         TELEGRAM_CHAT_ID = '-1002345619813'
 
-        // Version aus Build-Nummer
+        // SSH-Tool Pfad (plink.exe)
+        PLINK_EXE = 'C:\\key\\plink.exe'
+        PLINK_KEY = 'C:\\key\\key\\private.ppk'
         VERSION_CODE = "${env.BUILD_NUMBER}"
     }
 
@@ -43,6 +45,10 @@ pipeline {
 
         stage('Setup Environment') {
             steps {
+                script {
+                    env.HAS_FLUTTER = fileExists("${env.FLUTTER_HOME}\\bin\\flutter.bat") ? 'true' : 'false'
+                    env.HAS_PLINK = fileExists(env.PLINK_EXE) ? 'true' : 'false'
+                }
                 bat '''
                     echo ========================================
                     echo Environment Setup
@@ -52,12 +58,21 @@ pipeline {
                     echo FLUTTER_HOME: %FLUTTER_HOME%
                     echo VERSION_CODE: %VERSION_CODE%
                     echo.
+                    echo Tool-Verfuegbarkeit:
+                    echo   Flutter: %HAS_FLUTTER%
+                    echo   Plink/SSH: %HAS_PLINK%
+                    echo.
                     java -version
                     echo.
                     if exist "%FLUTTER_HOME%\\bin\\flutter.bat" (
                         flutter --version
                     ) else (
                         echo WARNUNG: Flutter nicht gefunden unter %FLUTTER_HOME%
+                        echo   -> Flutter-Stages werden uebersprungen
+                    )
+                    if not exist "%PLINK_EXE%" (
+                        echo WARNUNG: plink.exe nicht gefunden unter %PLINK_EXE%
+                        echo   -> SSH/Deploy-Stages werden uebersprungen
                     )
                     echo ========================================
                 '''
@@ -83,12 +98,12 @@ pipeline {
 
         stage('Backend: Lint & Test (Remote)') {
             when {
-                expression { return params.DEPLOY_BACKEND }
+                expression { return params.DEPLOY_BACKEND && fileExists(env.PLINK_EXE) }
             }
             steps {
                 bat '''
                     echo PHP Lint auf Server ausfuehren...
-                    "C:\\key\\plink.exe" -i "C:\\key\\key\\private.ppk" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden/webserver && find app -name '*.php' -exec php -l {} \\; 2>&1 | grep -i error && echo PHP LINT FEHLER GEFUNDEN && exit 1 || echo Alle PHP-Dateien fehlerfrei"
+                    "%PLINK_EXE%" -i "%PLINK_KEY%" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden/webserver && find app -name '*.php' -exec php -l {} \\; 2>&1 | grep -i error && echo PHP LINT FEHLER GEFUNDEN && exit 1 || echo Alle PHP-Dateien fehlerfrei"
                 '''
             }
         }
@@ -96,7 +111,7 @@ pipeline {
         stage('Backend: Deploy to Server') {
             when {
                 allOf {
-                    expression { return params.DEPLOY_BACKEND }
+                    expression { return params.DEPLOY_BACKEND && fileExists(env.PLINK_EXE) }
                     branch 'main'
                 }
             }
@@ -105,7 +120,7 @@ pipeline {
                     echo 'Deploying backend to profipos.de...'
                     bat '''
                         echo Deploying backend...
-                        "C:\\key\\plink.exe" -i "C:\\key\\key\\private.ppk" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden && git pull origin main && cd webserver && composer install --no-dev --optimize-autoloader --no-interaction && php spark migrate --all && echo Deploy erfolgreich"
+                        "%PLINK_EXE%" -i "%PLINK_KEY%" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden && git pull origin main && cd webserver && composer install --no-dev --optimize-autoloader --no-interaction && php spark migrate --all && echo Deploy erfolgreich"
                     '''
                 }
             }
@@ -258,14 +273,14 @@ pipeline {
         stage('Setup Cron Jobs') {
             when {
                 allOf {
-                    expression { return params.DEPLOY_BACKEND }
+                    expression { return params.DEPLOY_BACKEND && fileExists(env.PLINK_EXE) }
                     branch 'main'
                 }
             }
             steps {
                 bat '''
                     echo Setting up cron jobs on server...
-                    "C:\\key\\plink.exe" -i "C:\\key\\key\\private.ppk" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden/webserver && (crontab -l 2>/dev/null | grep -v 'spark ' ; echo '*/5 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark provider:sync >> /var/log/einfach-laden-cron.log 2>&1' ; echo '*/2 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark notifications:process >> /var/log/einfach-laden-cron.log 2>&1' ; echo '*/10 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark sessions:check-stale >> /var/log/einfach-laden-cron.log 2>&1' ; echo '*/15 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark sessions:recover-stuck >> /var/log/einfach-laden-cron.log 2>&1' ; echo '0 2 * * * cd /srv/www/git/de.einfach-laden/webserver && php spark billing:retry-pending >> /var/log/einfach-laden-cron.log 2>&1' ; echo '0 3 1 * * cd /srv/www/git/de.einfach-laden/webserver && php spark billing:subscription-invoices >> /var/log/einfach-laden-cron.log 2>&1' ; echo '0 4 * * 0 cd /srv/www/git/de.einfach-laden/webserver && php spark devices:cleanup >> /var/log/einfach-laden-cron.log 2>&1' ; echo '0 5 * * * cd /srv/www/git/de.einfach-laden/webserver && php spark notifications:cleanup >> /var/log/einfach-laden-cron.log 2>&1' ; echo '*/30 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark sessions:check-blocking >> /var/log/einfach-laden-cron.log 2>&1') | crontab - && echo Cron jobs eingerichtet"
+                    "%PLINK_EXE%" -i "%PLINK_KEY%" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden/webserver && (crontab -l 2>/dev/null | grep -v 'spark ' ; echo '*/5 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark provider:sync >> /var/log/einfach-laden-cron.log 2>&1' ; echo '*/2 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark notifications:process >> /var/log/einfach-laden-cron.log 2>&1' ; echo '*/10 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark sessions:check-stale >> /var/log/einfach-laden-cron.log 2>&1' ; echo '*/15 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark sessions:recover-stuck >> /var/log/einfach-laden-cron.log 2>&1' ; echo '0 2 * * * cd /srv/www/git/de.einfach-laden/webserver && php spark billing:retry-pending >> /var/log/einfach-laden-cron.log 2>&1' ; echo '0 3 1 * * cd /srv/www/git/de.einfach-laden/webserver && php spark billing:subscription-invoices >> /var/log/einfach-laden-cron.log 2>&1' ; echo '0 4 * * 0 cd /srv/www/git/de.einfach-laden/webserver && php spark devices:cleanup >> /var/log/einfach-laden-cron.log 2>&1' ; echo '0 5 * * * cd /srv/www/git/de.einfach-laden/webserver && php spark notifications:cleanup >> /var/log/einfach-laden-cron.log 2>&1' ; echo '*/30 * * * * cd /srv/www/git/de.einfach-laden/webserver && php spark sessions:check-blocking >> /var/log/einfach-laden-cron.log 2>&1') | crontab - && echo Cron jobs eingerichtet"
                 '''
             }
         }
