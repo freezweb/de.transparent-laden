@@ -115,11 +115,11 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - calculation_timestamp
 - **Tarif-Typ**: tariff_type [simple|time_based|tiered] – Komplexität des Quelltarifs
 - **Resolved Tarif (zum Zeitpunkt aufgelöst)**:
-  - resolved_per_kwh_cent, resolved_per_min_cent, resolved_start_fee_cent, resolved_blocking_fee_per_min_cent
+  - resolved_per_kwh_tenth_cent, resolved_per_min_tenth_cent, resolved_start_fee_cent, resolved_blocking_fee_per_min_cent
   - resolved_tariff_json (vollständiger ResolvedTariff als JSON für Nachvollziehbarkeit)
 - **Structured Tarif (Original-Rohdaten)**: structured_tariff_json (StructuredTariff vom Provider, exakte Kopie zum Snapshot-Zeitpunkt)
-- **Roaming-Komponente**: roaming_fee_type, roaming_fee_value, roaming_fee_calculated_cent
-- **Plattform-Komponente**: platform_fee_per_kwh_cent, platform_fee_base_percent, subscription_discount_percent, effective_platform_fee_percent, platform_fee_calculated_cent
+- **Roaming-Komponente**: roaming_fee_type, roaming_fee_value, roaming_fee_estimated_cent
+- **Plattform-Komponente**: platform_fee_per_kwh_tenth_cent, platform_fee_base_percent, subscription_discount_percent, effective_platform_fee_percent, platform_fee_estimated_cent
 - **Payment-Komponente**: payment_fee_fixed_cent, payment_fee_percentage, payment_fee_min_cent, payment_fee_max_cent
   - **Berechnung**: Payment-Fee wird ZULETZT auf den Gesamtbetrag (CPO + Roaming + Plattform) angewendet, nicht als Zwischenschritt
 - **Transparenz**: transparency_json (strukturierte Prozentanteile aller Komponenten)
@@ -129,11 +129,23 @@ Vollständige Plattform für transparenten eMobility Ladedienst (EMSP). Nutzt fr
 - **Neu**: Enthält sowohl den aufgelösten Tarif (für aktuelle Berechnung) als auch den Original-StructuredTariff (für Audit/Nachvollziehbarkeit)
 
 ### invoices
-- id (PK), user_id (FK→users), session_id (FK→charging_sessions, nullable – auch für Abo-Rechnungen), invoice_number (unique), invoice_type [charging|subscription], amount_net_cent, tax_percent, tax_amount_cent, amount_gross_cent, currency, lexware_invoice_id, lexware_status [pending|created|sent|paid|overdue|failed], pdf_path, retry_count, last_retry_at, created_at, synced_at
+- id (PK), user_id (FK→users), session_id (FK→charging_sessions, nullable – auch für Abo-Rechnungen), invoice_number (unique), invoice_type [charging|subscription], amount_net_cent, tax_percent, tax_amount_cent, amount_gross_cent, currency, line_items_json, lexware_invoice_id, lexware_status [pending|created|sent|paid|overdue|failed], pdf_path, retry_count, last_retry_at, created_at, synced_at
+- **line_items_json**: Strukturierte Rechnungspositionen, abgeleitet aus Snapshot + Actuals:
+  ```json
+  [
+    { "pos": 1, "desc": "Ladeenergie 12,4 kWh × 28,6 ct", "net_cent": 355, "tax_pct": 19 },
+    { "pos": 2, "desc": "Startgebühr", "net_cent": 100, "tax_pct": 19 },
+    { "pos": 3, "desc": "Roaming-Gebühr", "net_cent": 42, "tax_pct": 19 },
+    { "pos": 4, "desc": "Plattformgebühr", "net_cent": 84, "tax_pct": 19 },
+    { "pos": 5, "desc": "Zahlungsartgebühr (Visa)", "net_cent": 16, "tax_pct": 19 }
+  ]
+  ```
+- **Verwendung**: BillingService generiert line_items aus Snapshot + Session-Actuals. LexwareAdapter mappt line_items auf Lexware-Rechnungspositionen.
 
 ### admin_users (separate Tabelle, keine Vermischung mit Endkunden)
 - id (PK), email (unique), password_hash, display_name, role [super_admin|admin|viewer], status [invited|totp_pending|active|blocked], last_login_at, created_at, updated_at
-- **TOTP (Pflicht)**: totp_secret_encrypted, totp_status [not_setup|pending_verification|active], totp_verified_at, recovery_codes_encrypted (JSON-Array, gehashed)
+- **TOTP (Pflicht)**: totp_secret_encrypted, totp_verified_at, recovery_codes_encrypted (JSON-Array, gehashed)
+- **TOTP-Status-Ableitung**: Kein separates `totp_status`-Feld. Status wird über `status` abgebildet: `totp_pending` = TOTP noch nicht eingerichtet, `active` = TOTP verifiziert und einsatzfähig.
 - **Einladungsflow**: invited_by (FK→admin_users, nullable), invitation_token_hash, invitation_expires_at
 - **Status-Machine**: invited (Einladungslink gesendet) → totp_pending (Passwort gesetzt, TOTP noch nicht eingerichtet) → active (TOTP verifiziert, voll einsatzfähig) → blocked (manuell gesperrt)
 - **Kritisch**: Kein Admin kann ohne aktives TOTP auf geschützte Endpunkte zugreifen. TOTP-Setup ist erzwungener Schritt nach erstem Login.
@@ -191,7 +203,7 @@ TariffRestrictions:
 
 PriceComponent:
   type: [ENERGY|TIME|FLAT|PARKING_TIME]  # OCPI-kompatibel
-  price: int (Cent)                       # Preis pro Einheit
+  price: int (Zehntel-Cent)               # Preis pro Einheit (einheitlich Zehntel-Cent, auch FLAT)
   stepSize: int                           # Schrittgröße (z.B. 1 kWh, 1 Min)
 ```
 
@@ -201,10 +213,10 @@ Ergebnis der Auflösung eines StructuredTariff zum aktuellen Zeitpunkt. Einfach 
 
 ```
 ResolvedTariff:
-  perKwhCent: int                   # Aufgelöster kWh-Preis
-  perMinuteCent: int                # Aufgelöster Minutenpreis
-  startFeeCent: int                 # Startgebühr
-  blockingFeePerMinuteCent: int     # Blockiergebühr nach Ladeende
+  perKwhTenthCent: int              # Aufgelöster kWh-Preis (Zehntel-Cent)
+  perMinuteTenthCent: int           # Aufgelöster Minutenpreis (Zehntel-Cent)
+  startFeeCent: int                 # Startgebühr (Cent)
+  blockingFeePerMinuteCent: int     # Blockiergebühr nach Ladeende (Cent)
   currency: string (EUR)
   resolvedAt: DateTime              # Zeitpunkt der Auflösung
   appliedElementIndex: int          # Index des genutzten TariffElement
@@ -265,6 +277,19 @@ TariffResolver:
 
 ## 5. PRICING ENGINE DESIGN
 
+### Einheitensystem (verbindlich)
+
+| Suffix | Einheit | Beispiel |
+|--------|---------|----------|
+| `*_cent` | Integer, Cent (1/100 EUR) | `estimated_total_30min_cent: 1180` = 11,80 € |
+| `*_tenth_cent` | Integer, Zehntel-Cent (1/1000 EUR) | `per_kwh_tenth_cent: 286` = 28,6 ct/kWh |
+| `*_percent` | Dezimal (0–100), eine Nachkommastelle | `percent: 68.0` |
+
+- **Regel**: Alle Geldbeträge sind ganzzahlig. Kein Float für monetäre Werte.
+- **Per-Unit-Raten** (pro kWh, pro Minute): `*_tenth_cent` – bewahrt Sub-Cent-Präzision (z.B. 28,6 ct/kWh = 286).
+- **Absolute Beträge** (Startgebühr, Gesamtpreis, Rechnungssummen): `*_cent`.
+- **Umrechnung**: `estimated_per_kwh_cent = round(sum(components[].per_kwh_tenth_cent) / 10)`
+
 ### Berechnungszeitpunkt
 1. **Pre-Start (Estimate)**: User sieht geschätzten Preis BEVOR er startet
 2. **Snapshot-Erstellung**: Beim Bestätigen des Ladevorgangs → alle Preiskomponenten eingefroren
@@ -315,6 +340,25 @@ TariffResolver:
   - Gesamt: 100%
 - Bei zeitabhängigen Tarifen: Hinweis "Tarif gilt bis HH:MM, danach Tarif Y"
 - Gespeichert als strukturiertes JSON im Snapshot
+- **Rundungsregel (Prozente)**: Largest Remainder Method (Hare-Niemeyer), 1 Nachkommastelle.
+  1. Berechne exakte Prozente: `component_cent / total_cent × 100`
+  2. Runde alle auf 1 Nachkommastelle ab (floor)
+  3. Differenz zu 100,0% auf die Komponenten mit den größten Nachkomma-Resten verteilen (+0,1%)
+  4. **Cent-Werte sind Source of Truth** – Prozente sind abgeleitete Darstellungswerte
+
+### Amortisierung von Einmalgebühren (Transparenz-Display)
+
+Startgebühr und fixe Payment-Gebühr sind Einmalbeträge, die für die Transparenz-Anzeige (ct/kWh-Aufschlüsselung) auf die geschätzte Lademenge umgelegt werden:
+
+```
+estimated_kwh = connector_power_kw × 0.5   # Annahme: 30 Min bei Nennleistung
+amortized_start_fee_tenth_cent = round(resolved_start_fee_cent × 10 / estimated_kwh)
+amortized_payment_fixed_tenth_cent = round(payment_fee_fixed_cent × 10 / estimated_kwh)
+```
+
+- **Zweck**: Nur für die Preisvorschau (Transparenz-Display), NICHT für die Endabrechnung.
+- **Endabrechnung**: Startgebühr und fixe Payment-Gebühr werden als absolute Beträge berechnet, nicht pro kWh.
+- **Hinweis im UI**: „Einmalgebühren umgelegt auf geschätzte 30 Min Ladedauer“
 
 ### Snapshot-Speicherung
 - Alle Berechnungsparameter in `pricing_snapshots` gespeichert
@@ -322,6 +366,48 @@ TariffResolver:
 - Enthält: ResolvedTariff + Original-StructuredTariff + alle Zwischenberechnungen
 - Session verlinkt auf Snapshot via FK
 - Sowohl aufgelöste Raten (für Berechnung) als auch Rohdaten (für Audit)
+
+### Endabrechnung (Final Calculation Formula)
+
+Nach Session-Ende wird der exakte Endbetrag aus Snapshot-Raten und tatsächlichem Verbrauch berechnet:
+
+```
+Eingabe:
+  snapshot     = pricing_snapshots-Record (immutabel)
+  actual_kwh   = charging_sessions.energy_kwh
+  actual_min   = charging_sessions.duration_seconds / 60
+  blocking_min = charging_sessions.blocking_duration_seconds / 60
+
+Schritt 1 – CPO-Kosten (Ergebnisse in Cent):
+  cpo_energy = round(snapshot.resolved_per_kwh_tenth_cent × actual_kwh / 10)
+  cpo_time   = round(snapshot.resolved_per_min_tenth_cent × actual_min / 10)
+  cpo_start  = snapshot.resolved_start_fee_cent
+  cpo_block  = round(snapshot.resolved_blocking_fee_per_min_cent × blocking_min)
+  cpo_total  = cpo_energy + cpo_time + cpo_start + cpo_block
+
+Schritt 2 – Roaming (Cent):
+  if snapshot.roaming_fee_type == 'fixed':
+    roaming = round(snapshot.roaming_fee_value × actual_kwh)   # roaming_fee_value in Cent/kWh
+  else:  # percentage
+    roaming = round(cpo_total × snapshot.roaming_fee_value / 100)
+
+Schritt 3 – Plattform (Cent):
+  platform = round((cpo_total + roaming) × snapshot.effective_platform_fee_percent / 100)
+
+Schritt 4 – Subtotal:
+  subtotal = cpo_total + roaming + platform
+
+Schritt 5 – Payment-Fee (ZULETZT, auf Gesamtbetrag):
+  raw_fee = snapshot.payment_fee_fixed_cent + round(subtotal × snapshot.payment_fee_percentage / 100)
+  payment = clamp(raw_fee, snapshot.payment_fee_min_cent, snapshot.payment_fee_max_cent)
+
+Schritt 6 – Endbetrag:
+  total_cent = subtotal + payment
+```
+
+- **Rundung**: Jeder Schritt wird einzeln auf ganzzahlige Cent gerundet (`round half up`).
+- **Alle Werte in Cent (Integer)** – keine Fließkomma-Zwischenergebnisse bei Geldbeträgen.
+- **Ergebnis**: `charging_sessions.total_price_cent = total_cent`
 
 ### Tarif-Auflösung (TariffResolver)
 - **Simple Tarife** (1 Element, keine Restrictions): Direkte Übernahme → tariff_type=simple
@@ -374,10 +460,10 @@ Geschätzter Preis: 42 ct/kWh
     "is_time_dependent": true,
     "current_tariff_valid_until": "2026-04-08T20:00:00+02:00",
     "components": [
-      { "name": "cpo", "label": "Infrastruktur (CPO)", "per_kwh_cent": 286, "percent": 68.0 },
-      { "name": "roaming", "label": "Roaming-Netzwerk", "per_kwh_cent": 34, "percent": 8.0 },
-      { "name": "platform", "label": "Plattform", "per_kwh_cent": 84, "percent": 20.0 },
-      { "name": "payment", "label": "Zahlungsart (Visa)", "per_kwh_cent": 16, "percent": 4.0 }
+      { "name": "cpo", "label": "Infrastruktur (CPO)", "per_kwh_tenth_cent": 286, "percent": 68.0 },
+      { "name": "roaming", "label": "Roaming-Netzwerk", "per_kwh_tenth_cent": 34, "percent": 8.0 },
+      { "name": "platform", "label": "Plattform", "per_kwh_tenth_cent": 84, "percent": 20.0 },
+      { "name": "payment", "label": "Zahlungsart (Visa)", "per_kwh_tenth_cent": 16, "percent": 4.0 }
     ],
     "blocking_fee": {
       "per_minute_cent": 5,
@@ -385,7 +471,7 @@ Geschätzter Preis: 42 ct/kWh
     },
     "subscription_hint": {
       "potential_saving_percent": 12,
-      "platform_fee_with_sub_per_kwh_cent": 34,
+      "platform_fee_with_sub_per_kwh_tenth_cent": 34,
       "plan_name": "Premium"
     },
     "time_tariff_hint": {
@@ -539,6 +625,7 @@ Geschätzter Preis: 42 ct/kWh
 | POST | /api/v1/admin/admins/invite | Neuen Admin einladen (nur super_admin) |
 | GET | /api/v1/admin/admins | Admin-Liste (nur super_admin) |
 | PUT | /api/v1/admin/admins/{id}/block | Admin sperren (nur super_admin) |
+| PUT | /api/v1/admin/admins/{id}/reset-totp | TOTP zurücksetzen → Status auf totp_pending, totp_secret + recovery_codes gelöscht (nur super_admin) |
 
 ### Auth Flow
 - **Access Token**: JWT, 15 Minuten Laufzeit, enthält user_id + role
@@ -809,6 +896,7 @@ lib/
 | 5 | Tarif-Normalisierung fehlerhaft | Robuste Konvertierung, Unit-Tests pro Adapter, Logging für unbekannte Formate |
 | 6 | Session-Status-Updates verzögert | Polling mit Timeout, User kann manuell beenden |
 | 7 | Zahlungsdaten-Sicherheit | Verschlüsselung, minimale Datenhaltung, keine vollständigen Kartennummern |
+| 7a | Tarifwechsel während laufender Session | Snapshot-Tarif gilt vollständig (E15). User wird VOR Start über zeitabh. Tarif informiert (PricePreview-Hinweis). Post-MVP: Pro-rata evaluieren |
 
 ### Mittel
 
@@ -857,7 +945,7 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 
 1. Migration: users-Tabelle
 2. Migration: user_refresh_tokens-Tabelle
-3. Migration: admin_users-Tabelle (inkl. TOTP-Felder: totp_secret_encrypted, totp_status, recovery_codes_encrypted, Status-Machine)
+3. Migration: admin_users-Tabelle (inkl. TOTP-Felder: totp_secret_encrypted, totp_verified_at, recovery_codes_encrypted, Status-Machine: invited→totp_pending→active→blocked)
 4. UserModel, AdminUserModel (mit Status-Machine-Logik: invited→totp_pending→active→blocked)
 5. JWT-Library erstellen (Token-Generierung, Validierung, pre_auth_token für Admin)
 6. JwtAuthFilter (CI4 Filter für geschützte Routen)
@@ -869,6 +957,7 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 12. AuditService
 13. Rate-Limit-Filter
 14. TOTP-Library (Secret-Generierung, Code-Validierung, Recovery-Code-Generierung)
+15. CLI-Command: `php spark admin:create-super` – Erstellt initialen super_admin (nur wenn 0 Admins existieren). Interaktiv: E-Mail + Passwort eingeben → Status direkt auf `totp_pending`. Erster Login erzwingt TOTP-Setup.
 
 ### Phase 3: Subscriptions & Payment Methods
 **Abhängigkeiten**: Phase 2
@@ -1004,6 +1093,7 @@ Phase 3 und 4 sind **parallel** ausführbar. Phase 5 blockiert auf beide. Phase 
 | E12 | Payment-Fee zuletzt auf Gesamtbetrag | Entspricht realer Gebührenberechnung der Zahlungsdienstleister (% auf Transaktionsbetrag) | Payment-Fee als Zwischenschritt – mathematisch falsch |
 | E13 | TOTP-Pflicht für alle Admins | Kein Admin-Zugang ohne 2FA, reduziert Angriffsfläche erheblich. Status-Machine erzwingt Setup | Optional TOTP – Sicherheitslücke bei nicht-aktivierten Admins |
 | E14 | TariffResolver als eigener Service | Trennung von Tarif-Auflösung (Provider-spezifisch) und Preiskalkulation (Business-Logik). Testbar, erweiterbar | Auflösung in PricingEngine – vermischt Verantwortlichkeiten |
+| E15 | Snapshot-Tarif gilt für gesamte Session (MVP) | Vereinfacht Billing erheblich: ein Snapshot, ein Tarif, eine Berechnung. Zeitabhängige Tarifwechsel während laufender Session werden NICHT berücksichtigt. User wird VOR Start über zeitabhängigen Tarif informiert (PricePreview-Hinweis) | Pro-rata Berechnung bei Tarifwechsel – Komplexität für MVP nicht gerechtfertigt |
 
 ---
 
