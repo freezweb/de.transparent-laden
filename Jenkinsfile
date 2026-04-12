@@ -270,12 +270,15 @@ pipeline {
             script {
                 def apkType = env.APK_TYPE ?: ((env.IS_MAIN == 'true') ? 'release' : 'debug')
                 def apkPath = "app\\build\\app\\outputs\\flutter-apk\\app-${apkType}.apk"
-                def msg = "Einfach Laden - Build Erfolgreich%0A%0ABuild: #${env.BUILD_NUMBER}%0AVersion: 1.0.${env.BUILD_NUMBER}%0ABranch: ${env.GIT_BRANCH_NAME}%0ACommit: ${env.GIT_COMMIT_SHORT}%0ATyp: ${apkType.toUpperCase()}%0ADauer: ${currentBuild.durationString}"
+                // %%0A statt %0A - CMD interpretiert %0 als Batch-Dateiname
+                def NL = '%%0A'
+                def msg = "Einfach Laden - Build Erfolgreich${NL}${NL}Build: #${env.BUILD_NUMBER}${NL}Version: 1.0.${env.BUILD_NUMBER}${NL}Branch: ${env.GIT_BRANCH_NAME}${NL}Commit: ${env.GIT_COMMIT_SHORT}${NL}Typ: ${apkType.toUpperCase()}${NL}Dauer: ${currentBuild.durationString}"
 
                 if (env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.DO_TELEGRAM == 'true' && fileExists(apkPath)) {
                     def sizeStr = bat(returnStdout: true, script: """@echo off
 for %%A in ("${apkPath}") do echo %%~zA""").trim()
-                    def apkSizeMB = (sizeStr.isLong() ? sizeStr.toLong() : 999999999L) / (1024L * 1024L)
+                    def apkBytes = sizeStr.isLong() ? sizeStr.toLong() : 999999999L
+                    def apkSizeMB = (int)(apkBytes / (1024L * 1024L))
                     if (apkSizeMB < 49) {
                         bat """
                             @echo off
@@ -287,7 +290,7 @@ for %%A in ("${apkPath}") do echo %%~zA""").trim()
                         """
                     } else {
                         def jobUrl = env.BUILD_URL ?: "http://10.2.0.10/job/de.einfach-laden/${env.BUILD_NUMBER}/"
-                        def bigMsg = "${msg}%0A%0AAPK zu gross fuer Telegram (${apkSizeMB} MB)%0ADownload: ${jobUrl}artifact/${apkPath.replace('\\', '/')}"
+                        def bigMsg = "${msg}${NL}${NL}APK zu gross fuer Telegram (${apkSizeMB} MB)${NL}Download: ${jobUrl}artifact/${apkPath.replace('\\', '/')}"
                         bat """
                             @echo off
                             echo APK zu gross fuer Telegram (${apkSizeMB} MB) - sende Link...
