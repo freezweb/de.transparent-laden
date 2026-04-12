@@ -37,7 +37,7 @@ class PriceBreakdownWidget extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.2),
+                  color: Color.fromRGBO(255, 193, 7, 0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
