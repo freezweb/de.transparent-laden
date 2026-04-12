@@ -42,7 +42,7 @@ class InvoicesScreen extends ConsumerWidget {
                   children: [
                     ListTile(
                       onTap: sessionId != null
-                          ? () => context.push('/session/${sessionId}')
+                          ? () => context.push('/session/$sessionId')
                           : null,
                       leading: const Icon(Icons.receipt),
                       title: Text(invoice['invoice_number'] ?? '#${invoice['id']}'),

@@ -37,7 +37,7 @@ class PriceBreakdownWidget extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.2),
+                  color: Colors.amber.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -146,13 +146,13 @@ class PriceBreakdownWidget extends StatelessWidget {
 
     return _Breakdown(
       operatorCent: energyCt,
-      operatorPct: total > 0 ? (energyCt / total * 100).round() : 0,
+      operatorPct: total > 0 ? (energyCt / total * 100).roundToDouble() : 0,
       roamingCent: roamingCt,
-      roamingPct: total > 0 ? (roamingCt / total * 100).round() : 0,
+      roamingPct: total > 0 ? (roamingCt / total * 100).roundToDouble() : 0,
       paymentCent: 0,
       paymentPct: 0,
       marginCent: platformCt,
-      marginPct: total > 0 ? (platformCt / total * 100).round() : 0,
+      marginPct: total > 0 ? (platformCt / total * 100).roundToDouble() : 0,
       totalCent: total,
       startFeeCent: 0,
       timePriceCtMin: _num(pricing['time_price_ct_min']),

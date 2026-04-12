@@ -228,30 +228,6 @@ pipeline {
             }
         }
 
-        stage('Send APK to Telegram') {
-            when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.DO_TELEGRAM == 'true' } }
-            steps {
-                script {
-                    def apkType = env.IS_MAIN == 'true' ? 'release' : 'debug'
-                    def apkPath = "app\\build\\app\\outputs\\flutter-apk\\app-${apkType}.apk"
-
-                    if (fileExists(apkPath)) {
-                        bat """
-                            @echo off
-                            echo Sende APK per Telegram...
-
-                            curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendDocument" ^
-                                -F "chat_id=%TELEGRAM_CHAT_ID%" ^
-                                -F "document=@${apkPath}" ^
-                                -F "caption=Einfach Laden v1.0.${env.BUILD_NUMBER} (${apkType}) - ${env.GIT_BRANCH_NAME}@${env.GIT_COMMIT_SHORT}"
-                        """
-                    } else {
-                        echo "Kein APK gefunden unter ${apkPath} - Telegram-Versand uebersprungen"
-                    }
-                }
-            }
-        }
-
         // ============================================================
         // CRON JOBS SETUP
         // ============================================================
@@ -270,11 +246,26 @@ pipeline {
     post {
         success {
             script {
-                bat """
-                    curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendMessage" ^
-                        -d "chat_id=%TELEGRAM_CHAT_ID%" ^
-                        -d "text=Einfach Laden - Build Erfolgreich%%0A%%0ABuild: #${env.BUILD_NUMBER}%%0AVersion: 1.0.${env.BUILD_NUMBER}%%0ABranch: ${env.GIT_BRANCH_NAME}%%0ACommit: ${env.GIT_COMMIT_SHORT}"
-                """
+                def apkType = (env.IS_MAIN == 'true') ? 'release' : 'debug'
+                def apkPath = "app\\build\\app\\outputs\\flutter-apk\\app-${apkType}.apk"
+                def msg = "Einfach Laden - Build Erfolgreich%0A%0ABuild: #${env.BUILD_NUMBER}%0AVersion: 1.0.${env.BUILD_NUMBER}%0ABranch: ${env.GIT_BRANCH_NAME}%0ACommit: ${env.GIT_COMMIT_SHORT}%0ADauer: ${currentBuild.durationString}"
+
+                if (env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.DO_TELEGRAM == 'true' && fileExists(apkPath)) {
+                    bat """
+                        @echo off
+                        echo Sende Erfolgs-Nachricht mit APK per Telegram...
+                        curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendDocument" ^
+                            -F "chat_id=%TELEGRAM_CHAT_ID%" ^
+                            -F "document=@${apkPath}" ^
+                            -F "caption=${msg}"
+                    """
+                } else {
+                    bat """
+                        curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendMessage" ^
+                            -d "chat_id=%TELEGRAM_CHAT_ID%" ^
+                            -d "text=${msg}"
+                    """
+                }
             }
 
             echo """
