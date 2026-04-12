@@ -41,7 +41,7 @@ class PaymentService {
     } catch (e) {
       _initialized = false;
       if (e.toString().contains('Stripe ist noch nicht konfiguriert')) rethrow;
-      throw Exception('Zahlungssystem konnte nicht initialisiert werden: $e');
+      throw Exception('Zahlungssystem konnte nicht initialisiert werden. Bitte prüfe deine Internetverbindung und versuche es erneut.');
     }
   }
 

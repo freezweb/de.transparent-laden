@@ -389,15 +389,19 @@ class PaymentMethodsScreen extends ConsumerWidget {
   }
 
   void _showError(BuildContext context, Object error) {
-    String message = 'Ein Fehler ist aufgetreten';
+    String message = 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.';
     if (error is DioException) {
       final serverMsg = error.response?.data?['messages']?['error']?.toString();
       if (serverMsg != null && serverMsg.isNotEmpty) {
         message = serverMsg;
+      } else if (error.response?.statusCode == 503) {
+        message = 'Dieser Dienst ist momentan nicht verfügbar. Bitte versuche es später erneut.';
       } else if (error.type == DioExceptionType.connectionError || error.type == DioExceptionType.connectionTimeout) {
-        message = 'Keine Verbindung zum Server';
-      } else {
-        message = error.message ?? message;
+        message = 'Keine Verbindung zum Server. Bitte prüfe deine Internetverbindung.';
+      } else if (error.response?.statusCode == 401) {
+        message = 'Sitzung abgelaufen. Bitte melde dich erneut an.';
+      } else if (error.response?.statusCode != null) {
+        message = 'Serverfehler (${error.response!.statusCode}). Bitte versuche es später erneut.';
       }
     } else if (error is Exception) {
       final str = error.toString();

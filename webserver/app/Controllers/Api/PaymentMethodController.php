@@ -49,6 +49,11 @@ class PaymentMethodController extends ApiBaseController
      */
     public function createSetupIntent()
     {
+        $config = config(\Config\Payment::class);
+        if (empty($config->stripeSecretKey)) {
+            return $this->fail('Stripe ist noch nicht konfiguriert. Bitte kontaktiere den Support.', 503);
+        }
+
         $data = $this->request->getJSON(true);
         $type = $data['type'] ?? 'credit_card';
 
@@ -66,7 +71,7 @@ class PaymentMethodController extends ApiBaseController
             ]);
         } catch (\Exception $e) {
             log_message('error', 'SetupIntent error: ' . $e->getMessage());
-            return $this->fail('Setup fehlgeschlagen: ' . $e->getMessage());
+            return $this->fail('Zahlungsmethode konnte nicht eingerichtet werden. Bitte versuche es später erneut.');
         }
     }
 
@@ -131,7 +136,7 @@ class PaymentMethodController extends ApiBaseController
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Confirm Stripe error: ' . $e->getMessage());
-            return $this->fail('Speichern fehlgeschlagen: ' . $e->getMessage());
+            return $this->fail('Zahlungsmethode konnte nicht gespeichert werden. Bitte versuche es erneut.');
         }
     }
 
@@ -143,6 +148,11 @@ class PaymentMethodController extends ApiBaseController
      */
     public function paypalSetup()
     {
+        $config = config(\Config\Payment::class);
+        if (empty($config->paypalClientId) || empty($config->paypalClientSecret)) {
+            return $this->fail('PayPal ist noch nicht konfiguriert. Bitte kontaktiere den Support.', 503);
+        }
+
         $data       = $this->request->getJSON(true);
         $returnUrl  = $data['return_url'] ?? 'https://transparent-laden.de/api/v1/payment-methods/paypal/callback';
         $cancelUrl  = $data['cancel_url'] ?? 'https://transparent-laden.de/api/v1/payment-methods/paypal/cancel';
@@ -157,7 +167,7 @@ class PaymentMethodController extends ApiBaseController
             ]);
         } catch (\Exception $e) {
             log_message('error', 'PayPal setup error: ' . $e->getMessage());
-            return $this->fail('PayPal-Einrichtung fehlgeschlagen: ' . $e->getMessage());
+            return $this->fail('PayPal-Einrichtung fehlgeschlagen. Bitte versuche es später erneut.');
         }
     }
 
@@ -213,7 +223,7 @@ class PaymentMethodController extends ApiBaseController
             ]);
         } catch (\Exception $e) {
             log_message('error', 'PayPal confirm error: ' . $e->getMessage());
-            return $this->fail('PayPal-Bestätigung fehlgeschlagen: ' . $e->getMessage());
+            return $this->fail('PayPal-Verknüpfung fehlgeschlagen. Bitte versuche es erneut.');
         }
     }
 
