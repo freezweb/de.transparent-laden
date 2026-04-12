@@ -116,6 +116,13 @@ pipeline {
                     ) else (
                         echo WARNUNG: licenses-Verzeichnis existiert nicht!
                     )
+                    REM Diagnostik: installierte NDK Versionen
+                    echo === NDK Versionen ===
+                    if exist "%ANDROID_HOME%\\ndk" (
+                        dir "%ANDROID_HOME%\\ndk"
+                    ) else (
+                        echo Kein NDK installiert
+                    )
                     echo === Lizenz-Setup abgeschlossen ===
                 '''
             }

@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "de.einfachladen.einfach_laden"
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    // ndkVersion bewusst nicht gesetzt - verhindert Auto-Download/Lizenz-Problem auf CI
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
