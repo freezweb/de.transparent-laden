@@ -19,6 +19,16 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// ndkVersion fuer ALLE Android-Subprojekte auf die installierte Version setzen
+// Verhindert Auto-Download von NDK 28 (Lizenz-Problem auf CI)
+subprojects {
+    afterEvaluate {
+        extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {
+            ndkVersion = "25.1.8937393"
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

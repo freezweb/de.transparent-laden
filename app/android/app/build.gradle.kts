@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "de.einfachladen.einfach_laden"
     compileSdk = 36
-    ndkVersion = "25.1.8937393"  // Auf Jenkins installierte Version - verhindert Auto-Download
+    ndkVersion = "25.1.8937393"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
