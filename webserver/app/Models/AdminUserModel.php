@@ -15,7 +15,8 @@ class AdminUserModel extends Model
     protected $allowedFields = [
         'email', 'password_hash', 'display_name', 'role', 'status',
         'totp_secret_encrypted', 'totp_verified_at', 'recovery_codes_encrypted',
-        'invited_by', 'invitation_token', 'invitation_expires_at',
+        'invited_by', 'invitation_token_hash', 'invitation_expires_at',
+        'last_login_at',
     ];
 
     protected $validationRules = [
@@ -31,7 +32,7 @@ class AdminUserModel extends Model
 
     public function findByInvitationToken(string $token): ?array
     {
-        return $this->where('invitation_token', $token)
+        return $this->where('invitation_token_hash', $token)
                      ->where('invitation_expires_at >', date('Y-m-d H:i:s'))
                      ->first();
     }

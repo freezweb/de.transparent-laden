@@ -59,14 +59,14 @@ class AdminAuthController extends ApiBaseController
 
         $this->adminModel->update($admin['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
 
-        $this->auditModel->log('admin_users', $admin['id'], 'admin', $admin['id'], 'login', []);
+        $this->auditModel->log('admin_users', $admin['id'], 'login', 'admin', $admin['id'], []);
 
         return $this->respond([
             'access_token' => $token,
             'admin'        => [
                 'id'    => (int) $admin['id'],
                 'email' => $admin['email'],
-                'name'  => $admin['name'],
+                'name'  => $admin['display_name'],
                 'role'  => $admin['role'],
             ],
         ]);
@@ -96,14 +96,14 @@ class AdminAuthController extends ApiBaseController
 
         $adminId = $this->adminModel->insert([
             'email'                  => $data['email'],
-            'name'                   => $data['name'],
+            'display_name'           => $data['name'],
             'role'                   => $data['role'],
             'status'                 => 'invited',
-            'invitation_token'       => hash('sha256', $token),
+            'invitation_token_hash'  => hash('sha256', $token),
             'invitation_expires_at'  => $expiresAt,
         ]);
 
-        $this->auditModel->log('admin_users', $adminId, 'admin', $this->userId, 'invite', [
+        $this->auditModel->log('admin_users', $adminId, 'invite', 'admin', $this->userId, [
             'email' => $data['email'],
             'role'  => $data['role'],
         ]);
@@ -141,12 +141,12 @@ class AdminAuthController extends ApiBaseController
         $recoveryCodes = $this->totp->generateRecoveryCodes();
 
         $this->adminModel->update($admin['id'], [
-            'password_hash'          => password_hash($data['password'], PASSWORD_ARGON2ID),
-            'totp_secret'            => $totpSecret,
-            'recovery_codes'         => json_encode($recoveryCodes),
-            'status'                 => 'totp_pending',
-            'invitation_token'       => null,
-            'invitation_expires_at'  => null,
+            'password_hash'              => password_hash($data['password'], PASSWORD_ARGON2ID),
+            'totp_secret_encrypted'      => $totpSecret,
+            'recovery_codes_encrypted'   => json_encode($recoveryCodes),
+            'status'                     => 'totp_pending',
+            'invitation_token_hash'      => null,
+            'invitation_expires_at'      => null,
         ]);
 
         $provisioningUri = $this->totp->getProvisioningUri($admin['email'], $totpSecret, 'EinfachLaden Admin');
@@ -176,13 +176,13 @@ class AdminAuthController extends ApiBaseController
             return $this->failNotFound('Admin not in TOTP setup state');
         }
 
-        if (! $this->totp->verify($admin['totp_secret'], $data['totp'])) {
+        if (! $this->totp->verify($admin['totp_secret_encrypted'], $data['totp'])) {
             return $this->failUnauthorized('Invalid TOTP code');
         }
 
         $this->adminModel->update($admin['id'], ['status' => 'active']);
 
-        $this->auditModel->log('admin_users', $admin['id'], 'admin', $admin['id'], 'totp_confirmed', []);
+        $this->auditModel->log('admin_users', $admin['id'], 'totp_confirmed', 'admin', $admin['id'], []);
 
         return $this->respond(['message' => 'TOTP confirmed. Account is now active.']);
     }

@@ -1,6 +1,8 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:einfach_laden/core/constants/app_constants.dart';
+import 'package:einfach_laden/core/network/api_exception.dart';
 import 'package:einfach_laden/features/auth/data/auth_repository.dart';
 import 'package:einfach_laden/features/auth/domain/models/user.dart';
 
@@ -28,16 +30,20 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   Future<void> login(String email, String password) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      final repo = ref.read(authRepositoryProvider);
-      final data = await repo.login(email, password);
+      try {
+        final repo = ref.read(authRepositoryProvider);
+        final data = await repo.login(email, password);
 
-      await _storage.write(key: StorageKeys.accessToken, value: data['access_token']);
-      await _storage.write(key: StorageKeys.refreshToken, value: data['refresh_token']);
+        await _storage.write(key: StorageKeys.accessToken, value: data['access_token']);
+        await _storage.write(key: StorageKeys.refreshToken, value: data['refresh_token']);
 
-      final profileData = await repo.getProfile();
-      final user = User.fromJson(profileData['user'] as Map<String, dynamic>);
+        final profileData = await repo.getProfile();
+        final user = User.fromJson(profileData['user'] as Map<String, dynamic>);
 
-      return AuthState(user: user, accessToken: data['access_token'], isAuthenticated: true);
+        return AuthState(user: user, accessToken: data['access_token'], isAuthenticated: true);
+      } on DioException catch (e) {
+        throw ApiException.fromDioException(e);
+      }
     });
   }
 
@@ -49,21 +55,25 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      final repo = ref.read(authRepositoryProvider);
-      final data = await repo.register(
-        email: email,
-        password: password,
-        firstName: firstName,
-        lastName: lastName,
-      );
+      try {
+        final repo = ref.read(authRepositoryProvider);
+        final data = await repo.register(
+          email: email,
+          password: password,
+          firstName: firstName,
+          lastName: lastName,
+        );
 
-      await _storage.write(key: StorageKeys.accessToken, value: data['access_token']);
-      await _storage.write(key: StorageKeys.refreshToken, value: data['refresh_token']);
+        await _storage.write(key: StorageKeys.accessToken, value: data['access_token']);
+        await _storage.write(key: StorageKeys.refreshToken, value: data['refresh_token']);
 
-      final profileData = await repo.getProfile();
-      final user = User.fromJson(profileData['user'] as Map<String, dynamic>);
+        final profileData = await repo.getProfile();
+        final user = User.fromJson(profileData['user'] as Map<String, dynamic>);
 
-      return AuthState(user: user, accessToken: data['access_token'], isAuthenticated: true);
+        return AuthState(user: user, accessToken: data['access_token'], isAuthenticated: true);
+      } on DioException catch (e) {
+        throw ApiException.fromDioException(e);
+      }
     });
   }
 

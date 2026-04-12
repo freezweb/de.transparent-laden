@@ -1,5 +1,5 @@
 class ApiConstants {
-  static const String baseUrl = 'https://transparent-laden.de/api/v1';
+  static const String baseUrl = 'https://profipos.de/einfach-laden/api/v1';
   static const Duration connectTimeout = Duration(seconds: 15);
   static const Duration receiveTimeout = Duration(seconds: 15);
 }

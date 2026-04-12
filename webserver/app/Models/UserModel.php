@@ -22,8 +22,8 @@ class UserModel extends Model
     protected $validationRules = [
         'email'         => 'required|valid_email|is_unique[users.email,id,{id}]',
         'password_hash' => 'required|min_length[60]',
-        'first_name'    => 'required|max_length[100]',
-        'last_name'     => 'required|max_length[100]',
+        'first_name'    => 'permit_empty|max_length[100]',
+        'last_name'     => 'permit_empty|max_length[100]',
     ];
 
     public function findByEmail(string $email): ?array

@@ -26,8 +26,8 @@ class AuthService
         $userId = $this->userModel->insert([
             'email'         => $data['email'],
             'password_hash' => password_hash($data['password'], PASSWORD_ARGON2ID),
-            'first_name'    => $data['first_name'],
-            'last_name'     => $data['last_name'],
+            'first_name'    => $data['first_name'] ?? null,
+            'last_name'     => $data['last_name'] ?? null,
             'phone'         => $data['phone'] ?? null,
             'status'        => 'pending',
         ]);
