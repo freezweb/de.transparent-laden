@@ -97,7 +97,7 @@ class ProfileScreen extends ConsumerWidget {
               _MenuItem(
                 icon: Icons.description,
                 label: 'Datenschutz',
-                onTap: () => launchUrl(Uri.parse('https://profipos.de/einfach-laden/datenschutz'), mode: LaunchMode.externalApplication),
+                onTap: () => launchUrl(Uri.parse('https://transparent-laden.de/datenschutz'), mode: LaunchMode.externalApplication),
               ),
             ],
           ),
