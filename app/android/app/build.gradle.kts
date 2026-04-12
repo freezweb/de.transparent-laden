@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "de.einfachladen.einfach_laden"
     compileSdk = 36
-    ndkVersion = "28.2.13676358"
+    ndkVersion = "25.1.8937393"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
