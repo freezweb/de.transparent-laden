@@ -11,6 +11,7 @@ class UserRefreshTokenModel extends Model
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';
     protected $useTimestamps    = true;
+    protected $updatedField     = '';
 
     protected $allowedFields = [
         'user_id', 'token_hash', 'device_info', 'expires_at',
