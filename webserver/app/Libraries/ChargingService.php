@@ -3,11 +3,13 @@
 namespace App\Libraries;
 
 use App\Libraries\Provider\ProviderFactory;
+use App\Libraries\PaymentGateway;
 use App\Models\ChargingSessionModel;
 use App\Models\ConnectorModel;
 use App\Models\PricingSnapshotModel;
 use App\Models\SessionEventModel;
 use App\Models\AuditLogModel;
+use App\Models\PaymentMethodModel;
 
 class ChargingService
 {
@@ -63,6 +65,57 @@ class ChargingService
         $snapshot = $this->snapshotModel->getLatestForConnector($connectorId);
         if ($snapshot) {
             $this->sessionModel->update($sessionId, ['pricing_snapshot_id' => $snapshot['id']]);
+        }
+
+        // ── Payment Pre-Authorization ──
+        // Wenn eine Zahlungsmethode angegeben wurde, vorautorisieren
+        if ($paymentMethodId) {
+            try {
+                $gateway = new PaymentGateway();
+                $authResult = $gateway->preAuthorize($userId, $paymentMethodId, $sessionId);
+
+                $this->sessionModel->update($sessionId, [
+                    'payment_gateway'     => $authResult['gateway'],
+                    'payment_gateway_ref' => $authResult['payment_intent_id'] ?? $authResult['authorization_id'] ?? null,
+                ]);
+
+                $this->eventModel->logEvent($sessionId, 'payment_preauthorized', $authResult);
+            } catch (\Exception $e) {
+                $this->sessionModel->update($sessionId, [
+                    'status'         => 'failed',
+                    'failure_reason' => 'Zahlungs-Vorautorisierung fehlgeschlagen: ' . $e->getMessage(),
+                ]);
+                $this->eventModel->logEvent($sessionId, 'payment_preauth_failed', ['error' => $e->getMessage()]);
+                throw new \RuntimeException('Zahlungs-Vorautorisierung fehlgeschlagen: ' . $e->getMessage());
+            }
+        } elseif (! $paymentMethodId) {
+            // Wenn keine Zahlungsmethode angegeben → Standard-Zahlungsmethode des Users verwenden
+            $paymentMethodModel = model(PaymentMethodModel::class);
+            $defaultMethod = $paymentMethodModel->getDefault($userId);
+            if ($defaultMethod) {
+                $paymentMethodId = (int) $defaultMethod['id'];
+                $this->sessionModel->update($sessionId, ['payment_method_id' => $paymentMethodId]);
+
+                try {
+                    $gateway = new PaymentGateway();
+                    $authResult = $gateway->preAuthorize($userId, $paymentMethodId, $sessionId);
+
+                    $this->sessionModel->update($sessionId, [
+                        'payment_gateway'     => $authResult['gateway'],
+                        'payment_gateway_ref' => $authResult['payment_intent_id'] ?? $authResult['authorization_id'] ?? null,
+                    ]);
+
+                    $this->eventModel->logEvent($sessionId, 'payment_preauthorized', $authResult);
+                } catch (\Exception $e) {
+                    $this->sessionModel->update($sessionId, [
+                        'status'         => 'failed',
+                        'failure_reason' => 'Zahlungs-Vorautorisierung fehlgeschlagen: ' . $e->getMessage(),
+                    ]);
+                    $this->eventModel->logEvent($sessionId, 'payment_preauth_failed', ['error' => $e->getMessage()]);
+                    throw new \RuntimeException('Zahlungs-Vorautorisierung fehlgeschlagen: ' . $e->getMessage());
+                }
+            }
+            // Kein Default → Ladevorgang ohne Payment starten (z.B. Free-Tier)
         }
 
         // Start via provider adapter
@@ -134,6 +187,37 @@ class ChargingService
 
             $this->sessionModel->update($sessionId, array_merge($updateData, $costs));
             $this->eventModel->logEvent($sessionId, 'session_completed', $costs, $status['energy_kwh'] ?? 0, $costs['total_price_cent'] ?? 0);
+
+            // ── Payment Capture: Endbetrag abbuchen ──
+            if (! empty($session['payment_gateway_ref']) && ! empty($session['payment_gateway']) && ! ($session['payment_captured'] ?? false)) {
+                $totalCent = $costs['total_price_cent'] ?? 0;
+                if ($totalCent > 0) {
+                    try {
+                        $gateway = new PaymentGateway();
+                        $captureResult = $gateway->capture(
+                            $session['payment_gateway'],
+                            $session['payment_gateway_ref'],
+                            $totalCent
+                        );
+
+                        $this->sessionModel->update($sessionId, ['payment_captured' => 1]);
+                        $this->eventModel->logEvent($sessionId, 'payment_captured', array_merge($captureResult, ['amount_cent' => $totalCent]));
+                    } catch (\Exception $paymentException) {
+                        log_message('error', "Payment capture failed for session $sessionId: " . $paymentException->getMessage());
+                        $this->eventModel->logEvent($sessionId, 'payment_capture_failed', ['error' => $paymentException->getMessage(), 'amount_cent' => $totalCent]);
+                        // Session bleibt completed — Capture wird via Cron nachgeholt
+                    }
+                } else {
+                    // 0€ Ladevorgang → Pre-Auth stornieren
+                    try {
+                        $gateway = new PaymentGateway();
+                        $gateway->cancelAuthorization($session['payment_gateway'], $session['payment_gateway_ref']);
+                        $this->eventModel->logEvent($sessionId, 'payment_preauth_cancelled', ['reason' => 'zero_cost']);
+                    } catch (\Exception $e) {
+                        log_message('warning', "Cancel pre-auth failed for session $sessionId: " . $e->getMessage());
+                    }
+                }
+            }
 
             $this->notificationService->enqueue($userId, 'charging_completed', [
                 'session_id'      => $sessionId,

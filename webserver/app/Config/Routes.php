@@ -82,7 +82,11 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], static function
     // ── Payment Methods ──
     $routes->group('payment-methods', ['filter' => 'jwt'], static function ($routes) {
         $routes->get('/', 'PaymentMethodController::index');
-        $routes->post('/', 'PaymentMethodController::store');
+        $routes->get('config', 'PaymentMethodController::config');
+        $routes->post('setup-intent', 'PaymentMethodController::createSetupIntent');
+        $routes->post('confirm-stripe', 'PaymentMethodController::confirmStripe');
+        $routes->post('paypal/setup', 'PaymentMethodController::paypalSetup');
+        $routes->post('paypal/confirm', 'PaymentMethodController::paypalConfirm');
         $routes->get('(:num)', 'PaymentMethodController::show/$1');
         $routes->put('(:num)/default', 'PaymentMethodController::setDefault/$1');
         $routes->delete('(:num)', 'PaymentMethodController::delete/$1');

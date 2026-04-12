@@ -16,7 +16,7 @@ class UserModel extends Model
     protected $allowedFields = [
         'email', 'password_hash', 'first_name', 'last_name',
         'phone', 'street', 'city', 'postal_code', 'country',
-        'email_verified_at', 'status',
+        'email_verified_at', 'status', 'stripe_customer_id',
     ];
 
     protected $validationRules = [

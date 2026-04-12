@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:einfach_laden/core/network/api_client.dart';
+import 'package:einfach_laden/core/services/payment_service.dart';
 
 final _paymentMethodsProvider = FutureProvider.autoDispose<List<dynamic>>((ref) async {
   final dio = ref.watch(dioProvider);
@@ -40,7 +43,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _showAddDialog(context, ref),
+            onPressed: () => _showAddSheet(context, ref),
           ),
         ],
       ),
@@ -71,7 +74,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
                   const Text('Füge eine Zahlungsmethode hinzu,\num Ladevorgänge zu bezahlen.', textAlign: TextAlign.center),
                   const SizedBox(height: 24),
                   FilledButton.icon(
-                    onPressed: () => _showAddDialog(context, ref),
+                    onPressed: () => _showAddSheet(context, ref),
                     icon: const Icon(Icons.add),
                     label: const Text('Zahlungsmethode hinzufügen'),
                   ),
@@ -91,7 +94,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
               return Card(
                 child: ListTile(
                   leading: Icon(_typeIcons[type] ?? Icons.payment, size: 32),
-                  title: Text(m['display_name'] ?? _typeLabels[type] ?? type),
+                  title: Text(m['label'] ?? _typeLabels[type] ?? type),
                   subtitle: Text(_typeLabels[type] ?? type),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -130,7 +133,9 @@ class PaymentMethodsScreen extends ConsumerWidget {
     try {
       if (action == 'default') {
         await dio.put('/payment-methods/$id/default');
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Standard-Zahlungsmethode aktualisiert')));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Standard-Zahlungsmethode aktualisiert')));
+        }
       } else if (action == 'delete') {
         final confirm = await showDialog<bool>(
           context: context,
@@ -159,60 +164,326 @@ class PaymentMethodsScreen extends ConsumerWidget {
     }
   }
 
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
-    final types = ['credit_card', 'debit_card', 'paypal', 'sepa', 'apple_pay', 'google_pay'];
-    String selectedType = 'credit_card';
-    final nameController = TextEditingController();
+  /// Bottom-Sheet mit verfügbaren Zahlungsarten.
+  /// Nur plattformpassende Optionen werden angezeigt.
+  void _showAddSheet(BuildContext context, WidgetRef ref) {
+    final paymentService = ref.read(paymentServiceProvider);
 
-    showDialog(
+    final options = <_PaymentOption>[
+      _PaymentOption(
+        type: 'credit_card',
+        icon: Icons.credit_card,
+        label: 'Kreditkarte',
+        subtitle: 'Visa, Mastercard, American Express',
+        onTap: () => _addStripeMethod(context, ref, 'credit_card'),
+      ),
+      _PaymentOption(
+        type: 'debit_card',
+        icon: Icons.credit_card,
+        label: 'Debitkarte',
+        subtitle: 'Girokarte, Maestro',
+        onTap: () => _addStripeMethod(context, ref, 'debit_card'),
+      ),
+      _PaymentOption(
+        type: 'sepa',
+        icon: Icons.account_balance,
+        label: 'SEPA-Lastschrift',
+        subtitle: 'Direkte Abbuchung von deinem Bankkonto',
+        onTap: () => _addSepaMethod(context, ref),
+      ),
+      _PaymentOption(
+        type: 'paypal',
+        icon: Icons.account_balance_wallet,
+        label: 'PayPal',
+        subtitle: 'Mit PayPal-Konto verbinden',
+        onTap: () => _addPayPalMethod(context, ref),
+      ),
+      if (paymentService.isGooglePayAvailable)
+        _PaymentOption(
+          type: 'google_pay',
+          icon: Icons.g_mobiledata,
+          label: 'Google Pay',
+          subtitle: 'Schnell bezahlen mit Google Pay',
+          onTap: () => _addGooglePayMethod(context, ref),
+        ),
+      if (paymentService.isApplePayAvailable)
+        _PaymentOption(
+          type: 'apple_pay',
+          icon: Icons.apple,
+          label: 'Apple Pay',
+          subtitle: 'Schnell bezahlen mit Apple Pay',
+          onTap: () => _addApplePayMethod(context, ref),
+        ),
+    ];
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: const Text('Zahlungsmethode hinzufügen'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: selectedType,
-                decoration: const InputDecoration(labelText: 'Typ', border: OutlineInputBorder()),
-                items: types.map((t) => DropdownMenuItem(value: t, child: Text(_typeLabels[t] ?? t))).toList(),
-                onChanged: (v) => setState(() => selectedType = v!),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Bezeichnung (optional)', border: OutlineInputBorder(), hintText: 'z.B. Meine Visa'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
-            FilledButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                try {
-                  final dio = ref.read(dioProvider);
-                  await dio.post('/payment-methods', data: {
-                    'type': selectedType,
-                    'token_reference': 'tok_${DateTime.now().millisecondsSinceEpoch}',
-                    'display_name': nameController.text.trim().isEmpty ? null : nameController.text.trim(),
-                    'is_default': '0',
-                  });
-                  ref.invalidate(_paymentMethodsProvider);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Zahlungsmethode hinzugefügt')));
-                  }
-                } on DioException catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: ${e.message}'), backgroundColor: Theme.of(context).colorScheme.error));
-                  }
-                }
-              },
-              child: const Text('Hinzufügen'),
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Text('Zahlungsmethode hinzufügen', style: Theme.of(context).textTheme.titleLarge),
             ),
+            ...options.map((opt) => ListTile(
+              leading: Icon(opt.icon, size: 28),
+              title: Text(opt.label),
+              subtitle: Text(opt.subtitle, style: Theme.of(context).textTheme.bodySmall),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(ctx);
+                opt.onTap();
+              },
+            )),
+            const SizedBox(height: 16),
           ],
         ),
       ),
+    );
+  }
+
+  // ── Stripe-basiert: Kreditkarte / Debitkarte ──
+
+  Future<void> _addStripeMethod(BuildContext context, WidgetRef ref, String type) async {
+    _showLoadingDialog(context, 'Karteneingabe wird vorbereitet...');
+    try {
+      final paymentService = ref.read(paymentServiceProvider);
+      await paymentService.setupCard(type);
+
+      if (context.mounted) {
+        Navigator.pop(context); // Loading schließen
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_typeLabels[type]} hinzugefügt')));
+        ref.invalidate(_paymentMethodsProvider);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Loading schließen
+        _showError(context, e);
+      }
+    }
+  }
+
+  // ── SEPA ──
+
+  Future<void> _addSepaMethod(BuildContext context, WidgetRef ref) async {
+    _showLoadingDialog(context, 'SEPA-Einrichtung wird vorbereitet...');
+    try {
+      final paymentService = ref.read(paymentServiceProvider);
+      await paymentService.setupSepa();
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('SEPA-Lastschrift hinzugefügt')));
+        ref.invalidate(_paymentMethodsProvider);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        _showError(context, e);
+      }
+    }
+  }
+
+  // ── PayPal: WebView für Login ──
+
+  Future<void> _addPayPalMethod(BuildContext context, WidgetRef ref) async {
+    _showLoadingDialog(context, 'PayPal wird gestartet...');
+    try {
+      final paymentService = ref.read(paymentServiceProvider);
+      final setupResult = await paymentService.startPayPalSetup();
+      final approvalUrl = setupResult['approval_url'] as String?;
+      final tokenId = setupResult['token_id'] as String?;
+
+      if (approvalUrl == null || approvalUrl.isEmpty) {
+        throw Exception('PayPal-Einrichtung fehlgeschlagen');
+      }
+
+      if (!context.mounted) return;
+      Navigator.pop(context); // Loading schließen
+
+      // WebView für PayPal-Login öffnen
+      final confirmed = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _PayPalWebViewPage(
+            approvalUrl: approvalUrl,
+            successUrlPrefix: 'https://transparent-laden.de/app/paypal-success',
+            cancelUrlPrefix: 'https://transparent-laden.de/app/paypal-cancel',
+          ),
+        ),
+      );
+
+      if (confirmed == true && tokenId != null && context.mounted) {
+        _showLoadingDialog(context, 'PayPal-Konto wird verknüpft...');
+        await paymentService.confirmPayPal(tokenId);
+
+        if (context.mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PayPal-Konto verknüpft')));
+          ref.invalidate(_paymentMethodsProvider);
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        // Sicherstellen, dass ein eventuell offener Loading-Dialog geschlossen wird
+        Navigator.of(context, rootNavigator: true).popUntil((route) => route is! DialogRoute);
+        _showError(context, e);
+      }
+    }
+  }
+
+  // ── Google Pay ──
+
+  Future<void> _addGooglePayMethod(BuildContext context, WidgetRef ref) async {
+    _showLoadingDialog(context, 'Google Pay wird eingerichtet...');
+    try {
+      final paymentService = ref.read(paymentServiceProvider);
+      await paymentService.setupGooglePay();
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Google Pay hinzugefügt')));
+        ref.invalidate(_paymentMethodsProvider);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        _showError(context, e);
+      }
+    }
+  }
+
+  // ── Apple Pay ──
+
+  Future<void> _addApplePayMethod(BuildContext context, WidgetRef ref) async {
+    _showLoadingDialog(context, 'Apple Pay wird eingerichtet...');
+    try {
+      final paymentService = ref.read(paymentServiceProvider);
+      await paymentService.setupApplePay();
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Apple Pay hinzugefügt')));
+        ref.invalidate(_paymentMethodsProvider);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        _showError(context, e);
+      }
+    }
+  }
+
+  // ── Hilfsmethoden ──
+
+  void _showLoadingDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 20),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showError(BuildContext context, Object error) {
+    String message = 'Ein Fehler ist aufgetreten';
+    if (error is DioException) {
+      message = error.response?.data?['messages']?['error']?.toString() ?? error.message ?? message;
+    } else if (error is Exception) {
+      final str = error.toString();
+      // Stripe StripeException cancellation — kein Fehler anzeigen
+      if (str.contains('StripeException') && str.contains('cancel')) return;
+      message = str.replaceFirst('Exception: ', '');
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Theme.of(context).colorScheme.error),
+    );
+  }
+}
+
+class _PaymentOption {
+  final String type;
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _PaymentOption({
+    required this.type,
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+}
+
+/// PayPal-Login im WebView.
+/// Wartet auf Redirect zu success/cancel URL.
+class _PayPalWebViewPage extends StatefulWidget {
+  final String approvalUrl;
+  final String successUrlPrefix;
+  final String cancelUrlPrefix;
+
+  const _PayPalWebViewPage({
+    required this.approvalUrl,
+    required this.successUrlPrefix,
+    required this.cancelUrlPrefix,
+  });
+
+  @override
+  State<_PayPalWebViewPage> createState() => _PayPalWebViewPageState();
+}
+
+class _PayPalWebViewPageState extends State<_PayPalWebViewPage> {
+  late final WebViewController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (request) {
+            if (request.url.startsWith(widget.successUrlPrefix)) {
+              Navigator.pop(context, true);
+              return NavigationDecision.prevent;
+            }
+            if (request.url.startsWith(widget.cancelUrlPrefix)) {
+              Navigator.pop(context, false);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.approvalUrl));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('PayPal-Anmeldung'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context, false),
+        ),
+      ),
+      body: WebViewWidget(controller: _controller),
     );
   }
 }

@@ -14,6 +14,7 @@ class ChargingSessionModel extends Model
 
     protected $allowedFields = [
         'user_id', 'connector_id', 'provider_id', 'payment_method_id',
+        'payment_gateway', 'payment_gateway_ref', 'payment_captured',
         'pricing_snapshot_id', 'status', 'external_session_id',
         'started_at', 'stopped_at', 'energy_kwh', 'duration_seconds',
         'blocking_duration_seconds', 'energy_cost_cent', 'time_cost_cent',
