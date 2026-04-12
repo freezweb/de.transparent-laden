@@ -19,7 +19,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     try {
       final repo = ref.read(authRepositoryProvider);
       final data = await repo.getProfile();
-      final user = User.fromJson(data['user'] as Map<String, dynamic>);
+      final user = User.fromJson(data);
       return AuthState(user: user, accessToken: token, isAuthenticated: true);
     } catch (_) {
       await _storage.deleteAll();
@@ -38,7 +38,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         await _storage.write(key: StorageKeys.refreshToken, value: data['refresh_token']);
 
         final profileData = await repo.getProfile();
-        final user = User.fromJson(profileData['user'] as Map<String, dynamic>);
+        final user = User.fromJson(profileData);
 
         return AuthState(user: user, accessToken: data['access_token'], isAuthenticated: true);
       } on DioException catch (e) {
@@ -68,7 +68,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         await _storage.write(key: StorageKeys.refreshToken, value: data['refresh_token']);
 
         final profileData = await repo.getProfile();
-        final user = User.fromJson(profileData['user'] as Map<String, dynamic>);
+        final user = User.fromJson(profileData);
 
         return AuthState(user: user, accessToken: data['access_token'], isAuthenticated: true);
       } on DioException catch (e) {
