@@ -11,6 +11,9 @@ import 'package:einfach_laden/features/profile/presentation/screens/edit_profile
 import 'package:einfach_laden/features/profile/presentation/screens/change_password_screen.dart';
 import 'package:einfach_laden/features/invoices/presentation/screens/invoices_screen.dart';
 import 'package:einfach_laden/features/charge_point/presentation/screens/charge_point_detail_screen.dart';
+import 'package:einfach_laden/features/profile/presentation/screens/payment_methods_screen.dart';
+import 'package:einfach_laden/features/profile/presentation/screens/subscription_screen.dart';
+import 'package:einfach_laden/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:einfach_laden/features/auth/providers/auth_provider.dart';
 import 'package:einfach_laden/core/widgets/app_shell.dart';
 
@@ -85,6 +88,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile/password',
         builder: (context, state) => const ChangePasswordScreen(),
+      ),
+      GoRoute(
+        path: '/profile/payment-methods',
+        builder: (context, state) => const PaymentMethodsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/subscription',
+        builder: (context, state) => const SubscriptionScreen(),
+      ),
+      GoRoute(
+        path: '/profile/notifications',
+        builder: (context, state) => const NotificationSettingsScreen(),
       ),
     ],
   );

@@ -71,21 +71,21 @@ class ProfileScreen extends ConsumerWidget {
             items: [
               _MenuItem(icon: Icons.person, label: 'Profil bearbeiten', onTap: () => context.push('/profile/edit')),
               _MenuItem(icon: Icons.lock, label: 'Passwort ändern', onTap: () => context.push('/profile/password')),
-              _MenuItem(icon: Icons.payment, label: 'Zahlungsmethoden', onTap: () => _showComingSoon(context, 'Zahlungsmethoden')),
+              _MenuItem(icon: Icons.payment, label: 'Zahlungsmethoden', onTap: () => context.push('/profile/payment-methods')),
             ],
           ),
 
           _MenuSection(
             title: 'Abo',
             items: [
-              _MenuItem(icon: Icons.card_membership, label: 'Abo verwalten', onTap: () => _showComingSoon(context, 'Aboverwaltung')),
+              _MenuItem(icon: Icons.card_membership, label: 'Abo verwalten', onTap: () => context.push('/profile/subscription')),
             ],
           ),
 
           _MenuSection(
             title: 'Benachrichtigungen',
             items: [
-              _MenuItem(icon: Icons.notifications, label: 'Push-Einstellungen', onTap: () => _showComingSoon(context, 'Push-Einstellungen')),
+              _MenuItem(icon: Icons.notifications, label: 'Push-Einstellungen', onTap: () => context.push('/profile/notifications')),
             ],
           ),
 
