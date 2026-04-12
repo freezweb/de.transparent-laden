@@ -231,13 +231,13 @@ pipeline {
                                     echo ========================================
                                     echo Release Build mit autorisiertem Keystore
                                     echo ========================================
-                                    flutter build apk --release --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%
+                                    flutter build apk --release --split-per-abi --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%
                                 """
                             }
                             env.APK_TYPE = 'release'
                         } else {
                             echo 'Kein Release-Keystore - baue Release-APK mit Debug-Signierung (Minification aktiv)'
-                            bat "flutter build apk --release --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%"
+                            bat "flutter build apk --release --split-per-abi --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%"
                             env.APK_TYPE = 'release'
                         }
                     }
@@ -269,10 +269,17 @@ pipeline {
         success {
             script {
                 def apkType = env.APK_TYPE ?: ((env.IS_MAIN == 'true') ? 'release' : 'debug')
-                def apkPath = "app\\build\\app\\outputs\\flutter-apk\\app-${apkType}.apk"
-                // %%0A statt %0A - CMD interpretiert %0 als Batch-Dateiname
+                // split-per-abi erzeugt app-arm64-v8a-release.apk (~20MB) statt einer 65MB+ Fat-APK
+                def apkDir = 'app\\build\\app\\outputs\\flutter-apk'
+                def arm64Apk = "${apkDir}\\app-arm64-v8a-${apkType}.apk"
+                def armeabiApk = "${apkDir}\\app-armeabi-v7a-${apkType}.apk"
+                def x86Apk = "${apkDir}\\app-x86_64-${apkType}.apk"
+                def fatApk = "${apkDir}\\app-${apkType}.apk"
+                // Bevorzuge arm64 (moderne Phones), Fallback auf Fat-APK
+                def apkPath = fileExists(arm64Apk) ? arm64Apk : fatApk
+
                 def NL = '%%0A'
-                def msg = "Einfach Laden - Build Erfolgreich${NL}${NL}Build: #${env.BUILD_NUMBER}${NL}Version: 1.0.${env.BUILD_NUMBER}${NL}Branch: ${env.GIT_BRANCH_NAME}${NL}Commit: ${env.GIT_COMMIT_SHORT}${NL}Typ: ${apkType.toUpperCase()}${NL}Dauer: ${currentBuild.durationString}"
+                def msg = "Einfach Laden - Build Erfolgreich${NL}${NL}Build: #${env.BUILD_NUMBER}${NL}Version: 1.0.${env.BUILD_NUMBER}${NL}Branch: ${env.GIT_BRANCH_NAME}${NL}Commit: ${env.GIT_COMMIT_SHORT}${NL}Typ: ${apkType.toUpperCase()} (arm64)${NL}Dauer: ${currentBuild.durationString}"
 
                 if (env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.DO_TELEGRAM == 'true' && fileExists(apkPath)) {
                     def sizeStr = bat(returnStdout: true, script: """@echo off
