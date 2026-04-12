@@ -273,12 +273,13 @@ pipeline {
                 def msg = "Einfach Laden - Build Erfolgreich%0A%0ABuild: #${env.BUILD_NUMBER}%0AVersion: 1.0.${env.BUILD_NUMBER}%0ABranch: ${env.GIT_BRANCH_NAME}%0ACommit: ${env.GIT_COMMIT_SHORT}%0ATyp: ${apkType.toUpperCase()}%0ADauer: ${currentBuild.durationString}"
 
                 if (env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.DO_TELEGRAM == 'true' && fileExists(apkPath)) {
-                    def apkFile = new File("${env.WORKSPACE}\\${apkPath}")
-                    def apkSizeMB = apkFile.length() / (1024 * 1024)
+                    def sizeStr = bat(returnStdout: true, script: """@echo off
+for %%A in ("${apkPath}") do echo %%~zA""").trim()
+                    def apkSizeMB = (sizeStr.isLong() ? sizeStr.toLong() : 999999999L) / (1024L * 1024L)
                     if (apkSizeMB < 49) {
                         bat """
                             @echo off
-                            echo Sende Erfolgs-Nachricht mit APK per Telegram (${String.format('%.1f', apkSizeMB)} MB)...
+                            echo Sende Erfolgs-Nachricht mit APK per Telegram (${apkSizeMB} MB)...
                             curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendDocument" ^
                                 -F "chat_id=%TELEGRAM_CHAT_ID%" ^
                                 -F "document=@${apkPath}" ^
@@ -286,10 +287,10 @@ pipeline {
                         """
                     } else {
                         def jobUrl = env.BUILD_URL ?: "http://10.2.0.10/job/de.einfach-laden/${env.BUILD_NUMBER}/"
-                        def bigMsg = "${msg}%0A%0AAPK zu gross fuer Telegram (${String.format('%.0f', apkSizeMB)} MB)%0ADownload: ${jobUrl}artifact/${apkPath.replace('\\', '/')}"
+                        def bigMsg = "${msg}%0A%0AAPK zu gross fuer Telegram (${apkSizeMB} MB)%0ADownload: ${jobUrl}artifact/${apkPath.replace('\\', '/')}"
                         bat """
                             @echo off
-                            echo APK zu gross fuer Telegram (${String.format('%.1f', apkSizeMB)} MB) - sende Link...
+                            echo APK zu gross fuer Telegram (${apkSizeMB} MB) - sende Link...
                             curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendMessage" ^
                                 -d "chat_id=%TELEGRAM_CHAT_ID%" ^
                                 -d "text=${bigMsg}"
