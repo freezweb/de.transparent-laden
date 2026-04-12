@@ -8,12 +8,6 @@ import 'package:einfach_laden/features/auth/providers/auth_provider.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature kommt bald!')),
-    );
-  }
-
   Future<void> _showAbout(BuildContext context) async {
     final info = await PackageInfo.fromPlatform();
     if (!context.mounted) return;

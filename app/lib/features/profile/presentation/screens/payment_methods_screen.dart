@@ -173,7 +173,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                value: selectedType,
+                initialValue: selectedType,
                 decoration: const InputDecoration(labelText: 'Typ', border: OutlineInputBorder()),
                 items: types.map((t) => DropdownMenuItem(value: t, child: Text(_typeLabels[t] ?? t))).toList(),
                 onChanged: (v) => setState(() => selectedType = v!),
