@@ -26,14 +26,22 @@ class PaymentService {
   Future<void> ensureInitialized() async {
     if (_initialized) return;
 
-    final config = await _ref.read(paymentConfigProvider.future);
-    final publishableKey = config['stripe_publishable_key'] as String? ?? '';
+    try {
+      final config = await _ref.read(paymentConfigProvider.future);
+      final publishableKey = config['stripe_publishable_key'] as String? ?? '';
 
-    if (publishableKey.isNotEmpty) {
+      if (publishableKey.isEmpty) {
+        throw Exception('Stripe ist noch nicht konfiguriert. Bitte kontaktiere den Support.');
+      }
+
       Stripe.publishableKey = publishableKey;
       Stripe.merchantIdentifier = 'merchant.de.einfachladen';
       await Stripe.instance.applySettings();
       _initialized = true;
+    } catch (e) {
+      _initialized = false;
+      if (e.toString().contains('Stripe ist noch nicht konfiguriert')) rethrow;
+      throw Exception('Zahlungssystem konnte nicht initialisiert werden: $e');
     }
   }
 

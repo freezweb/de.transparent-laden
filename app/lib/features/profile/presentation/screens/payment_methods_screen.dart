@@ -164,56 +164,9 @@ class PaymentMethodsScreen extends ConsumerWidget {
   }
 
   /// Bottom-Sheet mit verfügbaren Zahlungsarten.
-  /// Nur plattformpassende Optionen werden angezeigt.
+  /// Stripe-Methoden werden unter "Stripe" gruppiert, PayPal separat.
   void _showAddSheet(BuildContext context, WidgetRef ref) {
     final paymentService = ref.read(paymentServiceProvider);
-
-    final options = <_PaymentOption>[
-      _PaymentOption(
-        type: 'credit_card',
-        icon: Icons.credit_card,
-        label: 'Kreditkarte',
-        subtitle: 'Visa, Mastercard, American Express',
-        onTap: () => _addStripeMethod(context, ref, 'credit_card'),
-      ),
-      _PaymentOption(
-        type: 'debit_card',
-        icon: Icons.credit_card,
-        label: 'Debitkarte',
-        subtitle: 'Girokarte, Maestro',
-        onTap: () => _addStripeMethod(context, ref, 'debit_card'),
-      ),
-      _PaymentOption(
-        type: 'sepa',
-        icon: Icons.account_balance,
-        label: 'SEPA-Lastschrift',
-        subtitle: 'Direkte Abbuchung von deinem Bankkonto',
-        onTap: () => _addSepaMethod(context, ref),
-      ),
-      _PaymentOption(
-        type: 'paypal',
-        icon: Icons.account_balance_wallet,
-        label: 'PayPal',
-        subtitle: 'Mit PayPal-Konto verbinden',
-        onTap: () => _addPayPalMethod(context, ref),
-      ),
-      if (paymentService.isGooglePayAvailable)
-        _PaymentOption(
-          type: 'google_pay',
-          icon: Icons.g_mobiledata,
-          label: 'Google Pay',
-          subtitle: 'Schnell bezahlen mit Google Pay',
-          onTap: () => _addGooglePayMethod(context, ref),
-        ),
-      if (paymentService.isApplePayAvailable)
-        _PaymentOption(
-          type: 'apple_pay',
-          icon: Icons.apple,
-          label: 'Apple Pay',
-          subtitle: 'Schnell bezahlen mit Apple Pay',
-          onTap: () => _addApplePayMethod(context, ref),
-        ),
-    ];
 
     showModalBottomSheet(
       context: context,
@@ -227,16 +180,49 @@ class PaymentMethodsScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
               child: Text('Zahlungsmethode hinzufügen', style: Theme.of(context).textTheme.titleLarge),
             ),
-            ...options.map((opt) => ListTile(
-              leading: Icon(opt.icon, size: 28),
-              title: Text(opt.label),
-              subtitle: Text(opt.subtitle, style: Theme.of(context).textTheme.bodySmall),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.pop(ctx);
-                opt.onTap();
-              },
-            )),
+            // ── Stripe ──
+            _SectionHeader(icon: Icons.credit_card, label: 'Stripe'),
+            _OptionTile(
+              icon: Icons.credit_card,
+              label: 'Kreditkarte',
+              subtitle: 'Visa, Mastercard, American Express',
+              onTap: () { Navigator.pop(ctx); _addStripeMethod(context, ref, 'credit_card'); },
+            ),
+            _OptionTile(
+              icon: Icons.credit_card_outlined,
+              label: 'Debitkarte',
+              subtitle: 'Girokarte, Maestro',
+              onTap: () { Navigator.pop(ctx); _addStripeMethod(context, ref, 'debit_card'); },
+            ),
+            _OptionTile(
+              icon: Icons.account_balance,
+              label: 'SEPA-Lastschrift',
+              subtitle: 'Direkte Abbuchung vom Bankkonto',
+              onTap: () { Navigator.pop(ctx); _addSepaMethod(context, ref); },
+            ),
+            if (paymentService.isGooglePayAvailable)
+              _OptionTile(
+                icon: Icons.g_mobiledata,
+                label: 'Google Pay',
+                subtitle: 'Schnell bezahlen mit Google Pay',
+                onTap: () { Navigator.pop(ctx); _addGooglePayMethod(context, ref); },
+              ),
+            if (paymentService.isApplePayAvailable)
+              _OptionTile(
+                icon: Icons.apple,
+                label: 'Apple Pay',
+                subtitle: 'Schnell bezahlen mit Apple Pay',
+                onTap: () { Navigator.pop(ctx); _addApplePayMethod(context, ref); },
+              ),
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            // ── PayPal ──
+            _SectionHeader(icon: Icons.account_balance_wallet, label: 'PayPal'),
+            _OptionTile(
+              icon: Icons.account_balance_wallet,
+              label: 'PayPal-Konto verbinden',
+              subtitle: 'Bezahlen über dein PayPal-Konto',
+              onTap: () { Navigator.pop(ctx); _addPayPalMethod(context, ref); },
+            ),
             const SizedBox(height: 16),
           ],
         ),
@@ -259,7 +245,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context); // Loading schließen
+        _dismissLoading(context);
         _showError(context, e);
       }
     }
@@ -280,7 +266,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context);
+        _dismissLoading(context);
         _showError(context, e);
       }
     }
@@ -349,7 +335,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context);
+        _dismissLoading(context);
         _showError(context, e);
       }
     }
@@ -370,7 +356,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context);
+        _dismissLoading(context);
         _showError(context, e);
       }
     }
@@ -397,10 +383,22 @@ class PaymentMethodsScreen extends ConsumerWidget {
     );
   }
 
+  /// Loading-Dialog sicher schließen, auch wenn er eventuell schon weg ist.
+  void _dismissLoading(BuildContext context) {
+    Navigator.of(context, rootNavigator: true).popUntil((route) => route is! DialogRoute);
+  }
+
   void _showError(BuildContext context, Object error) {
     String message = 'Ein Fehler ist aufgetreten';
     if (error is DioException) {
-      message = error.response?.data?['messages']?['error']?.toString() ?? error.message ?? message;
+      final serverMsg = error.response?.data?['messages']?['error']?.toString();
+      if (serverMsg != null && serverMsg.isNotEmpty) {
+        message = serverMsg;
+      } else if (error.type == DioExceptionType.connectionError || error.type == DioExceptionType.connectionTimeout) {
+        message = 'Keine Verbindung zum Server';
+      } else {
+        message = error.message ?? message;
+      }
     } else if (error is Exception) {
       final str = error.toString();
       // Stripe StripeException cancellation — kein Fehler anzeigen
@@ -408,25 +406,68 @@ class PaymentMethodsScreen extends ConsumerWidget {
       message = str.replaceFirst('Exception: ', '');
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Theme.of(context).colorScheme.error),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 5),
+      ),
     );
   }
 }
 
-class _PaymentOption {
-  final String type;
+/// Abschnitts-Header im Bottom-Sheet (z.B. "Stripe", "PayPal")
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _SectionHeader({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Einzelne Zahlungsoption im Bottom-Sheet.
+class _OptionTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String subtitle;
   final VoidCallback onTap;
 
-  const _PaymentOption({
-    required this.type,
+  const _OptionTile({
     required this.icon,
     required this.label,
     required this.subtitle,
     required this.onTap,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 32),
+      leading: Icon(icon, size: 24),
+      title: Text(label),
+      subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
 }
 
 /// PayPal-Login im WebView.
