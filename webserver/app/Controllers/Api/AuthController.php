@@ -31,8 +31,15 @@ class AuthController extends ApiBaseController
         try {
             $tokens = $this->authService->register($data);
             return $this->respondCreated($tokens);
+        } catch (\CodeIgniter\Database\Exceptions\DatabaseException $e) {
+            if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                return $this->failResourceExists('Email already registered');
+            }
+            log_message('error', 'Registration failed: ' . $e->getMessage());
+            return $this->failServerError('Registration failed');
         } catch (\Exception $e) {
-            return $this->failResourceExists('Email already registered');
+            log_message('error', 'Registration failed: ' . $e->getMessage());
+            return $this->failServerError('Registration failed');
         }
     }
 
