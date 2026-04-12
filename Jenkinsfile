@@ -98,20 +98,25 @@ pipeline {
             steps {
                 bat '''
                     @echo off
-                    if not exist "%ANDROID_HOME%\\licenses" mkdir "%ANDROID_HOME%\\licenses"
+                    echo === Android Lizenzen akzeptieren ===
 
-                    REM License-Format: Leerzeile + Hash (Android SDK erwartet fuehrenden Newline)
-                    (echo. & echo 24333f8a63b6825ea9c5514f83c2829b004d1fee & echo. & echo d56f5187479451eabf01fb78af6dfcb131a6481e)>"%ANDROID_HOME%\\licenses\\android-sdk-license"
-                    (echo. & echo 84831b9409646a918e30573bab4c9c91346d8abd)>"%ANDROID_HOME%\\licenses\\android-sdk-preview-license"
-                    (echo. & echo 8933bad161af4178b1185d1a37fbf41ea5269c55)>"%ANDROID_HOME%\\licenses\\android-ndk-license"
+                    REM Methode 1: flutter doctor --android-licenses (zuverlaessigste Methode)
+                    (for /L %%i in (1,1,30) do @echo y) | flutter doctor --android-licenses 2>&1 || echo Flutter license Befehl abgeschlossen
 
-                    echo Android Licenses erstellt
-
-                    REM Fallback: sdkmanager Lizenzen akzeptieren falls verfuegbar
+                    REM Methode 2: sdkmanager --licenses als Backup (30x y fuer alle Prompts)
                     if exist "%ANDROID_HOME%\\cmdline-tools\\latest\\bin\\sdkmanager.bat" (
-                        echo y| call "%ANDROID_HOME%\\cmdline-tools\\latest\\bin\\sdkmanager.bat" --licenses >nul 2>nul
-                        echo sdkmanager Lizenzen akzeptiert
+                        (for /L %%i in (1,1,30) do @echo y) | call "%ANDROID_HOME%\\cmdline-tools\\latest\\bin\\sdkmanager.bat" --licenses 2>&1 || echo sdkmanager Befehl abgeschlossen
                     )
+
+                    REM Verifizierung: License-Dateien anzeigen
+                    echo.
+                    echo === License Files in %ANDROID_HOME%\licenses ===
+                    if exist "%ANDROID_HOME%\\licenses" (
+                        dir "%ANDROID_HOME%\\licenses"
+                    ) else (
+                        echo WARNUNG: licenses-Verzeichnis existiert nicht!
+                    )
+                    echo === Lizenz-Setup abgeschlossen ===
                 '''
             }
         }
