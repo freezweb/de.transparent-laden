@@ -236,9 +236,9 @@ pipeline {
                             }
                             env.APK_TYPE = 'release'
                         } else {
-                            echo 'WARNUNG: Keystore nicht gefunden - baue Debug-APK als Fallback'
-                            bat "flutter build apk --debug --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%"
-                            env.APK_TYPE = 'debug'
+                            echo 'Kein Release-Keystore - baue Release-APK mit Debug-Signierung (Minification aktiv)'
+                            bat "flutter build apk --release --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%"
+                            env.APK_TYPE = 'release'
                         }
                     }
                 }
@@ -279,57 +279,15 @@ pipeline {
 for %%A in ("${apkPath}") do echo %%~zA""").trim()
                     def apkBytes = sizeStr.isLong() ? sizeStr.toLong() : 999999999L
                     def apkSizeMB = (int)(apkBytes / (1024L * 1024L))
-                    if (apkSizeMB < 49) {
-                        // Direkt senden - kleiner als 50MB Bot-API-Limit
-                        bat """
-                            @echo off
-                            echo Sende APK per Telegram (${apkSizeMB} MB)...
-                            curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendDocument" ^
-                                -F "chat_id=%TELEGRAM_CHAT_ID%" ^
-                                -F "document=@${apkPath}" ^
-                                -F "caption=${msg}"
-                        """
-                    } else {
-                        // APK in 49MB-Teile splitten und einzeln senden
-                        def chunkSize = 49 * 1024 * 1024
-                        def totalParts = (int)Math.ceil((double)apkBytes / chunkSize)
-                        def apkDir = apkPath.replace('\\', '/').substring(0, apkPath.replace('\\', '/').lastIndexOf('/'))
 
-                        // Zuerst Info-Nachricht senden
-                        bat """
-                            @echo off
-                            echo Splitte APK (${apkSizeMB} MB) in ${totalParts} Teile...
-                            curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendMessage" ^
-                                -d "chat_id=%TELEGRAM_CHAT_ID%" ^
-                                -d "text=${msg}${NL}${NL}APK: ${apkSizeMB} MB in ${totalParts} Teilen${NL}Zusammenfuegen: copy /b part_*  app.apk"
-                        """
-
-                        // PowerShell zum Splitten verwenden (verfuegbar auf Jenkins Windows)
-                        bat """
-                            @echo off
-                            powershell -Command "\$bytes = [System.IO.File]::ReadAllBytes('${apkPath.replace('\\', '\\\\')}'); \$chunk = ${chunkSize}; \$total = [Math]::Ceiling(\$bytes.Length / \$chunk); for (\$i = 0; \$i -lt \$total; \$i++) { \$start = \$i * \$chunk; \$len = [Math]::Min(\$chunk, \$bytes.Length - \$start); \$part = New-Object byte[] \$len; [Array]::Copy(\$bytes, \$start, \$part, 0, \$len); \$name = '${apkPath.replace('\\', '\\\\')}' + '.part_' + (\$i+1).ToString('D2'); [System.IO.File]::WriteAllBytes(\$name, \$part); Write-Host ('Part ' + (\$i+1) + '/' + \$total + ': ' + \$name) }"
-                        """
-
-                        // Teile einzeln per Telegram senden
-                        for (int i = 1; i <= totalParts; i++) {
-                            def partFile = "${apkPath}.part_${String.format('%02d', i)}"
-                            def partCaption = "Teil ${i}/${totalParts} - app-${apkType}.apk (Build #${env.BUILD_NUMBER})"
-                            bat """
-                                @echo off
-                                echo Sende Teil ${i}/${totalParts}...
-                                curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendDocument" ^
-                                    -F "chat_id=%TELEGRAM_CHAT_ID%" ^
-                                    -F "document=@${partFile}" ^
-                                    -F "caption=${partCaption}"
-                            """
-                        }
-
-                        // Teile aufraeumen
-                        bat """
-                            @echo off
-                            del "${apkPath}.part_*" 2>nul
-                        """
-                    }
+                    bat """
+                        @echo off
+                        echo Sende APK per Telegram (${apkSizeMB} MB)...
+                        curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendDocument" ^
+                            -F "chat_id=%TELEGRAM_CHAT_ID%" ^
+                            -F "document=@${apkPath}" ^
+                            -F "caption=${msg}"
+                    """
                 } else {
                     bat """
                         curl -s -X POST "https://api.telegram.org/bot%TELEGRAM_BOT_TOKEN%/sendMessage" ^
