@@ -197,33 +197,34 @@ pipeline {
             when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.IS_MAIN == 'true' } }
             steps {
                 dir('app') {
-                    withCredentials([
-                        string(credentialsId: 'keystore-password', variable: 'KEYSTORE_PASSWORD'),
-                        string(credentialsId: 'key-alias', variable: 'KEY_ALIAS'),
-                        string(credentialsId: 'key-password', variable: 'KEY_PASSWORD')
-                    ]) {
-                        bat """
-                            @echo off
-                            set KEYSTORE_FILE=%WORKSPACE%\\einfach-laden-release.keystore
-                            echo ========================================
-                            echo Release Build mit autorisiertem Keystore
-                            echo KEYSTORE_FILE=%KEYSTORE_FILE%
-                            echo ========================================
-
-                            if not exist "%KEYSTORE_FILE%" (
-                                echo FEHLER: Autorisierter Keystore nicht gefunden: %KEYSTORE_FILE%
-                                echo Der Keystore muss manuell auf dem Jenkins-Agent platziert werden.
-                                exit /b 1
-                            )
-
-                            flutter build apk --release --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%
-                        """
+                    script {
+                        def keystoreFile = "${env.WORKSPACE}\\einfach-laden-release.keystore"
+                        if (fileExists(keystoreFile)) {
+                            withCredentials([
+                                string(credentialsId: 'keystore-password', variable: 'KEYSTORE_PASSWORD'),
+                                string(credentialsId: 'key-alias', variable: 'KEY_ALIAS'),
+                                string(credentialsId: 'key-password', variable: 'KEY_PASSWORD')
+                            ]) {
+                                bat """
+                                    @echo off
+                                    echo ========================================
+                                    echo Release Build mit autorisiertem Keystore
+                                    echo ========================================
+                                    flutter build apk --release --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%
+                                """
+                            }
+                            env.APK_TYPE = 'release'
+                        } else {
+                            echo 'WARNUNG: Keystore nicht gefunden - baue Debug-APK als Fallback'
+                            bat "flutter build apk --debug --build-number=%VERSION_CODE% --build-name=1.0.%VERSION_CODE%"
+                            env.APK_TYPE = 'debug'
+                        }
                     }
                 }
             }
             post {
                 success {
-                    archiveArtifacts artifacts: 'app/build/app/outputs/flutter-apk/app-release.apk', fingerprint: true, allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'app/build/app/outputs/flutter-apk/app-*.apk', fingerprint: true, allowEmptyArchive: true
                 }
             }
         }
@@ -246,9 +247,9 @@ pipeline {
     post {
         success {
             script {
-                def apkType = (env.IS_MAIN == 'true') ? 'release' : 'debug'
+                def apkType = env.APK_TYPE ?: ((env.IS_MAIN == 'true') ? 'release' : 'debug')
                 def apkPath = "app\\build\\app\\outputs\\flutter-apk\\app-${apkType}.apk"
-                def msg = "Einfach Laden - Build Erfolgreich%0A%0ABuild: #${env.BUILD_NUMBER}%0AVersion: 1.0.${env.BUILD_NUMBER}%0ABranch: ${env.GIT_BRANCH_NAME}%0ACommit: ${env.GIT_COMMIT_SHORT}%0ADauer: ${currentBuild.durationString}"
+                def msg = "Einfach Laden - Build Erfolgreich%0A%0ABuild: #${env.BUILD_NUMBER}%0AVersion: 1.0.${env.BUILD_NUMBER}%0ABranch: ${env.GIT_BRANCH_NAME}%0ACommit: ${env.GIT_COMMIT_SHORT}%0ATyp: ${apkType.toUpperCase()}%0ADauer: ${currentBuild.durationString}"
 
                 if (env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' && env.DO_TELEGRAM == 'true' && fileExists(apkPath)) {
                     bat """
