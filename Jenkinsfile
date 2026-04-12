@@ -145,7 +145,7 @@ pipeline {
         stage('Backend: Deploy to Server') {
             when { expression { env.DO_DEPLOY == 'true' && env.HAS_PLINK == 'true' && env.IS_MAIN == 'true' } }
             steps {
-                echo 'Deploying backend to profipos.de...'
+                echo 'Deploying backend to transparent-laden.de...'
                 bat '''
                     "%PLINK_EXE%" -i "%PLINK_KEY%" -batch root@profipos.de "cd /srv/www/git/de.einfach-laden && git pull origin main && cd webserver && composer install --no-dev --optimize-autoloader --no-interaction && php spark migrate --all && echo Deploy erfolgreich"
                 '''
