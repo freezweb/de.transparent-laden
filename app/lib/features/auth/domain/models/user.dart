@@ -3,6 +3,7 @@ class User {
   final String email;
   final String? firstName;
   final String? lastName;
+  final String? phone;
   final String? street;
   final String? city;
   final String? postalCode;
@@ -14,6 +15,7 @@ class User {
     required this.email,
     this.firstName,
     this.lastName,
+    this.phone,
     this.street,
     this.city,
     this.postalCode,
@@ -26,6 +28,7 @@ class User {
         email: json['email'] as String,
         firstName: json['first_name'] as String?,
         lastName: json['last_name'] as String?,
+        phone: json['phone'] as String?,
         street: json['street'] as String?,
         city: json['city'] as String?,
         postalCode: json['postal_code'] as String?,

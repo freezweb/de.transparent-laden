@@ -1,10 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:einfach_laden/features/auth/providers/auth_provider.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
+
+  void _showComingSoon(BuildContext context, String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$feature kommt bald!')),
+    );
+  }
+
+  Future<void> _showAbout(BuildContext context) async {
+    final info = await PackageInfo.fromPlatform();
+    if (!context.mounted) return;
+    showAboutDialog(
+      context: context,
+      applicationName: 'Einfach Laden',
+      applicationVersion: 'Version ${info.version} (Build ${info.buildNumber})',
+      applicationIcon: const Icon(Icons.ev_station, size: 48, color: Colors.green),
+      children: [
+        const Text('Transparentes Laden für Elektrofahrzeuge.\n\nFaire Preise, volle Transparenz.'),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,23 +69,23 @@ class ProfileScreen extends ConsumerWidget {
           _MenuSection(
             title: 'Konto',
             items: [
-              _MenuItem(icon: Icons.person, label: 'Profil bearbeiten', onTap: () {}),
-              _MenuItem(icon: Icons.lock, label: 'Passwort ändern', onTap: () {}),
-              _MenuItem(icon: Icons.payment, label: 'Zahlungsmethoden', onTap: () {}),
+              _MenuItem(icon: Icons.person, label: 'Profil bearbeiten', onTap: () => context.push('/profile/edit')),
+              _MenuItem(icon: Icons.lock, label: 'Passwort ändern', onTap: () => context.push('/profile/password')),
+              _MenuItem(icon: Icons.payment, label: 'Zahlungsmethoden', onTap: () => _showComingSoon(context, 'Zahlungsmethoden')),
             ],
           ),
 
           _MenuSection(
             title: 'Abo',
             items: [
-              _MenuItem(icon: Icons.card_membership, label: 'Abo verwalten', onTap: () {}),
+              _MenuItem(icon: Icons.card_membership, label: 'Abo verwalten', onTap: () => _showComingSoon(context, 'Aboverwaltung')),
             ],
           ),
 
           _MenuSection(
             title: 'Benachrichtigungen',
             items: [
-              _MenuItem(icon: Icons.notifications, label: 'Push-Einstellungen', onTap: () {}),
+              _MenuItem(icon: Icons.notifications, label: 'Push-Einstellungen', onTap: () => _showComingSoon(context, 'Push-Einstellungen')),
             ],
           ),
 
@@ -71,8 +93,12 @@ class ProfileScreen extends ConsumerWidget {
             title: 'Sonstiges',
             items: [
               _MenuItem(icon: Icons.receipt_long, label: 'Rechnungen', onTap: () => context.push('/invoices')),
-              _MenuItem(icon: Icons.info, label: 'Über die App', onTap: () {}),
-              _MenuItem(icon: Icons.description, label: 'Datenschutz', onTap: () {}),
+              _MenuItem(icon: Icons.info, label: 'Über die App', onTap: () => _showAbout(context)),
+              _MenuItem(
+                icon: Icons.description,
+                label: 'Datenschutz',
+                onTap: () => launchUrl(Uri.parse('https://profipos.de/einfach-laden/datenschutz'), mode: LaunchMode.externalApplication),
+              ),
             ],
           ),
 
@@ -93,8 +119,15 @@ class ProfileScreen extends ConsumerWidget {
           ),
 
           const SizedBox(height: 32),
-          Center(
-            child: Text('Version 1.0.0', style: Theme.of(context).textTheme.bodySmall),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version = snapshot.data?.version ?? '...';
+              final build = snapshot.data?.buildNumber ?? '';
+              return Center(
+                child: Text('Version $version ($build)', style: Theme.of(context).textTheme.bodySmall),
+              );
+            },
           ),
         ],
       ),

@@ -7,6 +7,8 @@ import 'package:einfach_laden/features/map/presentation/screens/map_screen.dart'
 import 'package:einfach_laden/features/charging/presentation/screens/charging_screen.dart';
 import 'package:einfach_laden/features/charging/presentation/screens/session_detail_screen.dart';
 import 'package:einfach_laden/features/profile/presentation/screens/profile_screen.dart';
+import 'package:einfach_laden/features/profile/presentation/screens/edit_profile_screen.dart';
+import 'package:einfach_laden/features/profile/presentation/screens/change_password_screen.dart';
 import 'package:einfach_laden/features/invoices/presentation/screens/invoices_screen.dart';
 import 'package:einfach_laden/features/charge_point/presentation/screens/charge_point_detail_screen.dart';
 import 'package:einfach_laden/features/auth/providers/auth_provider.dart';
@@ -75,6 +77,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/invoices',
         builder: (context, state) => const InvoicesScreen(),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: '/profile/password',
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
     ],
   );
