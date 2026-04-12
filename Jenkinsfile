@@ -110,7 +110,7 @@ pipeline {
 
                     REM Verifizierung: License-Dateien anzeigen
                     echo.
-                    echo === License Files in %ANDROID_HOME%\licenses ===
+                    echo === License Files ===
                     if exist "%ANDROID_HOME%\\licenses" (
                         dir "%ANDROID_HOME%\\licenses"
                     ) else (
