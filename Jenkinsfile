@@ -99,10 +99,19 @@ pipeline {
                 bat '''
                     @echo off
                     if not exist "%ANDROID_HOME%\\licenses" mkdir "%ANDROID_HOME%\\licenses"
-                    echo 24333f8a63b6825ea9c5514f83c2829b004d1fee > "%ANDROID_HOME%\\licenses\\android-sdk-license"
-                    echo d56f5187479451eabf01fb78af6dfcb131a6481e > "%ANDROID_HOME%\\licenses\\android-sdk-preview-license"
-                    echo 8933bad161af4178b1185d1a37fbf41ea5269c55 > "%ANDROID_HOME%\\licenses\\android-ndk-license"
+
+                    REM License-Format: Leerzeile + Hash (Android SDK erwartet fuehrenden Newline)
+                    (echo. & echo 24333f8a63b6825ea9c5514f83c2829b004d1fee & echo. & echo d56f5187479451eabf01fb78af6dfcb131a6481e)>"%ANDROID_HOME%\\licenses\\android-sdk-license"
+                    (echo. & echo 84831b9409646a918e30573bab4c9c91346d8abd)>"%ANDROID_HOME%\\licenses\\android-sdk-preview-license"
+                    (echo. & echo 8933bad161af4178b1185d1a37fbf41ea5269c55)>"%ANDROID_HOME%\\licenses\\android-ndk-license"
+
                     echo Android Licenses erstellt
+
+                    REM Fallback: sdkmanager Lizenzen akzeptieren falls verfuegbar
+                    if exist "%ANDROID_HOME%\\cmdline-tools\\latest\\bin\\sdkmanager.bat" (
+                        echo y| call "%ANDROID_HOME%\\cmdline-tools\\latest\\bin\\sdkmanager.bat" --licenses >nul 2>nul
+                        echo sdkmanager Lizenzen akzeptiert
+                    )
                 '''
             }
         }
