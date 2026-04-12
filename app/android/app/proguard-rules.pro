@@ -18,3 +18,7 @@
 
 # Play Core (deferred components)
 -dontwarn com.google.android.play.core.**
+
+# Stripe Push Provisioning (not used, suppress R8 missing class errors)
+-dontwarn com.stripe.android.pushProvisioning.**
+-dontwarn com.reactnativestripesdk.pushprovisioning.**
