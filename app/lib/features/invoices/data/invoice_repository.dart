@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:einfach_laden/core/network/api_client.dart';
+import 'package:einfach_laden/core/data/demo_data.dart';
 
 final invoiceRepositoryProvider = Provider<InvoiceRepository>((ref) {
   return InvoiceRepository(ref.watch(dioProvider));
@@ -21,7 +22,12 @@ class InvoiceRepository {
   }
 }
 
-final invoiceListProvider = FutureProvider.family<Map<String, dynamic>, int>((ref, page) {
-  final repo = ref.watch(invoiceRepositoryProvider);
-  return repo.getInvoices(page: page);
+final invoiceListProvider = FutureProvider.family<Map<String, dynamic>, int>((ref, page) async {
+  try {
+    final repo = ref.watch(invoiceRepositoryProvider);
+    final data = await repo.getInvoices(page: page);
+    final items = List.from(data['invoices'] ?? []);
+    if (items.isNotEmpty) return data;
+  } catch (_) {}
+  return DemoData.invoices();
 });
