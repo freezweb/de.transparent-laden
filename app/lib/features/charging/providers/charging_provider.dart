@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:einfach_laden/features/charging/data/charging_repository.dart';
-import 'package:einfach_laden/core/data/demo_data.dart';
 
 final activeSessionProvider = FutureProvider<Map<String, dynamic>?>((ref) {
   final repo = ref.watch(chargingRepositoryProvider);
@@ -8,13 +7,8 @@ final activeSessionProvider = FutureProvider<Map<String, dynamic>?>((ref) {
 });
 
 final chargingHistoryProvider = FutureProvider.family<Map<String, dynamic>, int>((ref, page) async {
-  try {
-    final repo = ref.watch(chargingRepositoryProvider);
-    final data = await repo.getHistory(page: page);
-    final sessions = List.from(data['sessions'] ?? []);
-    if (sessions.isNotEmpty) return data;
-  } catch (_) {}
-  return DemoData.chargingHistory();
+  final repo = ref.watch(chargingRepositoryProvider);
+  return repo.getHistory(page: page);
 });
 
 final sessionStatusProvider = FutureProvider.family<Map<String, dynamic>, int>((ref, sessionId) {
