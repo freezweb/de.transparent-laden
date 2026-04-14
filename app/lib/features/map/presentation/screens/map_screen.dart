@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:einfach_laden/features/charge_point/providers/charge_point_provider.dart';
 import 'package:einfach_laden/features/charge_point/data/charge_point_repository.dart';
+import 'package:einfach_laden/features/map/presentation/widgets/marker_generator.dart';
 
 final userLocationProvider = FutureProvider<Position>((ref) async {
   final permission = await Geolocator.checkPermission();
@@ -37,9 +37,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String? _currentCategory;
   bool _showFilterSheet = false;
 
-  // Current visible bounds for bbox loading
-  LatLngBounds? _currentBounds;
-  List<Map<String, dynamic>> _stations = [];
+  // Persistent station cache — stations accumulate, never removed on pan
+  final Map<String, Map<String, dynamic>> _stationCache = {};
+  Map<String, Marker> _markerCache = {};
+  LatLngBounds? _lastLoadedBounds;
   bool _loading = false;
 
   bool get _hasActiveFilters =>
@@ -50,6 +51,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void dispose() {
     _mapController?.dispose();
     super.dispose();
+  }
+
+  String _stationKey(Map<String, dynamic> cp) {
+    if (cp['source'] == 'osm') return 'osm_${cp['osm_id']}';
+    return 'local_${cp['id']}';
   }
 
   Future<void> _loadStationsForBounds(LatLngBounds bounds) async {
@@ -69,10 +75,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         currentCategory: _currentCategory,
         onlyStartable: _onlyStartable,
       );
+
+      // Merge into persistent cache — never remove old stations
+      for (final cp in data) {
+        final key = _stationKey(cp);
+        _stationCache[key] = cp;
+      }
+
+      await _rebuildMarkers();
+
       if (mounted) {
         setState(() {
-          _stations = data;
-          _currentBounds = bounds;
+          _lastLoadedBounds = bounds;
           _loading = false;
         });
       }
@@ -81,24 +95,94 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  Future<void> _rebuildMarkers() async {
+    final newMarkers = <String, Marker>{};
+
+    for (final entry in _stationCache.entries) {
+      final key = entry.key;
+      final cp = entry.value;
+
+      final lat = double.tryParse(cp['latitude']?.toString() ?? '');
+      final lng = double.tryParse(cp['longitude']?.toString() ?? '');
+      if (lat == null || lng == null) continue;
+
+      final bool isStartable = cp['is_startable'] == true || cp['is_startable'] == 1;
+      final bool isExternal = cp['source'] == 'osm';
+      final double maxPower = cp['max_power_kw'] is num
+          ? (cp['max_power_kw'] as num).toDouble()
+          : 0;
+      final int available = cp['available_connectors'] is num
+          ? (cp['available_connectors'] as num).toInt()
+          : 0;
+      final int total = cp['total_connectors'] is num
+          ? (cp['total_connectors'] as num).toInt()
+          : 0;
+
+      // Green ONLY if startable through us AND has free connector
+      final bool hasFreeSpot = isStartable && available > 0;
+
+      final icon = await MarkerGenerator.getMarker(
+        maxPowerKw: maxPower,
+        isStartable: isStartable,
+        hasFreeSpot: hasFreeSpot,
+        isExternal: isExternal,
+      );
+
+      final operatorName = cp['operator_name']?.toString() ?? '';
+      final name = cp['name']?.toString() ?? 'Ladepunkt';
+
+      // Build snippet with availability info
+      final parts = <String>[];
+      if (operatorName.isNotEmpty) parts.add(operatorName);
+      if (maxPower > 0) parts.add('${maxPower.toInt()} kW');
+      final bolts = MarkerGenerator.boltCount(maxPower);
+      parts.add('${'⚡' * bolts}');
+      if (!isExternal && total > 0) {
+        parts.add('$available/$total frei');
+      }
+      if (hasFreeSpot) parts.add('Startbar ✓');
+
+      final cpId = cp['id']?.toString() ?? cp['osm_id']?.toString() ?? key;
+
+      newMarkers[key] = Marker(
+        markerId: MarkerId(key),
+        position: LatLng(lat, lng),
+        infoWindow: InfoWindow(
+          title: name,
+          snippet: parts.join(' • '),
+          onTap: isExternal ? null : () => context.push('/charge-point/$cpId'),
+        ),
+        icon: icon,
+      );
+    }
+
+    _markerCache = newMarkers;
+  }
+
   void _onCameraIdle() async {
     final controller = _mapController;
     if (controller == null) return;
     final bounds = await controller.getVisibleRegion();
-    // Only reload if bounds changed significantly
-    if (_currentBounds == null || _boundsChangedSignificantly(bounds)) {
+    if (_lastLoadedBounds == null || _boundsNeedReload(bounds)) {
       _loadStationsForBounds(bounds);
     }
   }
 
-  bool _boundsChangedSignificantly(LatLngBounds newBounds) {
-    if (_currentBounds == null) return true;
-    final old = _currentBounds!;
-    const threshold = 0.005; // ~500m
-    return (old.southwest.latitude - newBounds.southwest.latitude).abs() > threshold ||
-        (old.southwest.longitude - newBounds.southwest.longitude).abs() > threshold ||
-        (old.northeast.latitude - newBounds.northeast.latitude).abs() > threshold ||
-        (old.northeast.longitude - newBounds.northeast.longitude).abs() > threshold;
+  bool _boundsNeedReload(LatLngBounds newBounds) {
+    if (_lastLoadedBounds == null) return true;
+    final old = _lastLoadedBounds!;
+    // Reload when viewport extends beyond previously loaded area
+    return newBounds.southwest.latitude < old.southwest.latitude - 0.002 ||
+        newBounds.southwest.longitude < old.southwest.longitude - 0.002 ||
+        newBounds.northeast.latitude > old.northeast.latitude + 0.002 ||
+        newBounds.northeast.longitude > old.northeast.longitude + 0.002;
+  }
+
+  void _clearAndReload() {
+    _stationCache.clear();
+    _markerCache.clear();
+    _lastLoadedBounds = null;
+    _onCameraIdle();
   }
 
   @override
@@ -138,8 +222,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
 
-          // Station count
-          if (_stations.isNotEmpty)
+          // Station count badge
+          if (_stationCache.isNotEmpty)
             Positioned(
               top: MediaQuery.of(context).padding.top + 64,
               right: 12,
@@ -153,7 +237,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    '${_stations.length} Stationen',
+                    '${_stationCache.length} Stationen',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -177,7 +261,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             Positioned(
               top: MediaQuery.of(context).padding.top + 64,
               left: 12,
-              right: _stations.isNotEmpty ? 120 : 12,
+              right: _stationCache.isNotEmpty ? 120 : 12,
               child: _buildActiveFilterChips(),
             ),
 
@@ -235,15 +319,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       child: Row(
         children: [
           if (_connectorType != null)
-            _chipRemovable(_connectorType!, () => setState(() => _connectorType = null)),
+            _chipRemovable(_connectorType!, () { setState(() => _connectorType = null); _clearAndReload(); }),
           if (_currentCategory != null)
-            _chipRemovable(_currentCategory!, () => setState(() => _currentCategory = null)),
+            _chipRemovable(_currentCategory!, () { setState(() => _currentCategory = null); _clearAndReload(); }),
           if (_minPowerKw != null)
-            _chipRemovable('ab ${_minPowerKw!.toInt()} kW', () => setState(() { _minPowerKw = null; _maxPowerKw = null; })),
+            _chipRemovable('ab ${_minPowerKw!.toInt()} kW', () { setState(() { _minPowerKw = null; _maxPowerKw = null; }); _clearAndReload(); }),
           if (_maxPowerKw != null && _minPowerKw == null)
-            _chipRemovable('bis ${_maxPowerKw!.toInt()} kW', () => setState(() => _maxPowerKw = null)),
+            _chipRemovable('bis ${_maxPowerKw!.toInt()} kW', () { setState(() => _maxPowerKw = null); _clearAndReload(); }),
           if (_onlyStartable == true)
-            _chipRemovable('Nur startbar', () => setState(() => _onlyStartable = null)),
+            _chipRemovable('Nur startbar', () { setState(() => _onlyStartable = null); _clearAndReload(); }),
         ],
       ),
     );
@@ -280,11 +364,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 Text('Filter', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => setState(() {
-                    _minPowerKw = null; _maxPowerKw = null;
-                    _connectorType = null; _onlyStartable = null; _currentCategory = null;
-                    _currentBounds = null; // force reload
-                  }),
+                  onPressed: () {
+                    setState(() {
+                      _minPowerKw = null; _maxPowerKw = null;
+                      _connectorType = null; _onlyStartable = null; _currentCategory = null;
+                    });
+                    _clearAndReload();
+                  },
                   child: const Text('Zurücksetzen'),
                 ),
                 IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _showFilterSheet = false)),
@@ -326,8 +412,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               child: FilledButton(
                 onPressed: () {
                   setState(() => _showFilterSheet = false);
-                  _currentBounds = null; // force reload with new filters
-                  _onCameraIdle();
+                  _clearAndReload();
                 },
                 child: const Text('Filter anwenden'),
               ),
@@ -363,74 +448,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _LegendItem(color: Colors.blue, label: 'AC (≤22 kW)'),
-            SizedBox(height: 4),
-            _LegendItem(color: Colors.orange, label: 'DC (50 kW)'),
-            SizedBox(height: 4),
-            _LegendItem(color: Colors.deepPurple, label: 'HPC (≥150 kW)'),
-            SizedBox(height: 4),
-            _LegendItem(color: Colors.green, label: 'Über uns startbar'),
-            SizedBox(height: 4),
-            _LegendItem(color: Colors.red, label: 'Nicht startbar'),
+            _LegendItem(icon: '⚡', color: Color(0xFF2E7D32), label: 'Frei & startbar'),
+            SizedBox(height: 3),
+            _LegendItem(icon: '⚡', color: Color(0xFF616161), label: 'AC (≤22 kW)'),
+            SizedBox(height: 3),
+            _LegendItem(icon: '⚡⚡', color: Color(0xFF616161), label: 'DC (50+ kW)'),
+            SizedBox(height: 3),
+            _LegendItem(icon: '⚡⚡⚡', color: Color(0xFF616161), label: 'HPC (150+ kW)'),
           ],
         ),
       ),
     );
   }
 
-  /// Determine marker hue based on max connector power.
-  double _markerHueForPower(double maxPowerKw, bool isStartable) {
-    // Startable stations get green
-    if (isStartable) return BitmapDescriptor.hueGreen;
-    // Speed-based colors
-    if (maxPowerKw >= 150) return BitmapDescriptor.hueViolet;   // HPC: purple
-    if (maxPowerKw >= 43)  return BitmapDescriptor.hueOrange;   // DC: orange
-    return BitmapDescriptor.hueAzure;                            // AC: blue
-  }
-
   Widget _buildMap(Position position) {
-    final markers = <Marker>{};
-
-    for (final cp in _stations) {
-      final lat = double.tryParse(cp['latitude']?.toString() ?? '');
-      final lng = double.tryParse(cp['longitude']?.toString() ?? '');
-      if (lat == null || lng == null) continue;
-
-      final bool isStartable = cp['is_startable'] == true || cp['is_startable'] == 1;
-      final bool isExternal = cp['source'] == 'osm';
-      final double maxPower = (cp['max_power_kw'] is num ? (cp['max_power_kw'] as num).toDouble() : 0);
-
-      double hue;
-      if (isStartable) {
-        hue = BitmapDescriptor.hueGreen;
-      } else if (isExternal && maxPower <= 0) {
-        hue = BitmapDescriptor.hueRed;
-      } else {
-        hue = _markerHueForPower(maxPower, false);
-      }
-
-      final cpId = cp['id']?.toString() ?? 'osm_${cp['osm_id']}';
-      final operatorName = cp['operator_name'] ?? '';
-      final name = cp['name'] ?? 'Ladepunkt';
-
-      String snippet = operatorName;
-      if (maxPower > 0) snippet += ' • ${maxPower.toInt()} kW';
-      if (isStartable) snippet += ' • Startbar ✓';
-
-      markers.add(Marker(
-        markerId: MarkerId('cp_$cpId'),
-        position: LatLng(lat, lng),
-        infoWindow: InfoWindow(
-          title: name,
-          snippet: snippet,
-          onTap: isExternal
-              ? null
-              : () => context.push('/charge-point/$cpId'),
-        ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(hue),
-      ));
-    }
-
     return GoogleMap(
       initialCameraPosition: CameraPosition(
         target: LatLng(position.latitude, position.longitude),
@@ -439,10 +470,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       myLocationEnabled: true,
       myLocationButtonEnabled: true,
       zoomControlsEnabled: false,
-      markers: markers,
+      markers: _markerCache.values.toSet(),
       onMapCreated: (controller) {
         _mapController = controller;
-        // Load initial stations after map created
         Future.delayed(const Duration(milliseconds: 500), _onCameraIdle);
       },
       onCameraIdle: _onCameraIdle,
@@ -451,16 +481,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 }
 
 class _LegendItem extends StatelessWidget {
+  final String icon;
   final Color color;
   final String label;
-  const _LegendItem({required this.color, required this.label});
+  const _LegendItem({required this.icon, required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.location_on, color: color, size: 16),
+        Container(
+          width: 20,
+          alignment: Alignment.center,
+          child: Text(icon, style: const TextStyle(fontSize: 10)),
+        ),
+        const SizedBox(width: 4),
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 4),
         Text(label, style: const TextStyle(fontSize: 11)),
       ],

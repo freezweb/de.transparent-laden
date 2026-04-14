@@ -94,6 +94,20 @@ class ChargePointController extends ApiBaseController
             }
             $cp['is_startable'] = isset($cp['is_startable']) ? (bool) $cp['is_startable'] : false;
             $cp['source'] = 'local';
+
+            // Availability: count total and available connectors
+            $cp['total_connectors'] = count($cp['connectors']);
+            $cp['available_connectors'] = 0;
+            $maxPwr = 0;
+            foreach ($cp['connectors'] as $c) {
+                if (($c['status'] ?? '') === 'available') {
+                    $cp['available_connectors']++;
+                }
+                $pwr = (float) ($c['power_kw'] ?? 0);
+                if ($pwr > $maxPwr) $maxPwr = $pwr;
+            }
+            $cp['max_power_kw'] = $maxPwr;
+
             $result[] = $cp;
         }
 
