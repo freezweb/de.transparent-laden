@@ -29,7 +29,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // Used for camera animations later
   // ignore: unused_field
   GoogleMapController? _mapController;
-  double _searchRadius = 10;
+  double? _minPowerKw;
 
   @override
   Widget build(BuildContext context) {
@@ -39,14 +39,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       appBar: AppBar(
         title: const Text('Ladepunkte'),
         actions: [
-          PopupMenuButton<double>(
+          PopupMenuButton<double?>(
             icon: const Icon(Icons.tune),
-            onSelected: (r) => setState(() => _searchRadius = r),
+            onSelected: (v) => setState(() => _minPowerKw = v),
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 5.0, child: Text('5 km')),
-              const PopupMenuItem(value: 10.0, child: Text('10 km')),
-              const PopupMenuItem(value: 25.0, child: Text('25 km')),
-              const PopupMenuItem(value: 50.0, child: Text('50 km')),
+              const PopupMenuItem(value: null, child: Text('Alle anzeigen')),
+              const PopupMenuItem(value: 11, child: Text('ab 11 kW')),
+              const PopupMenuItem(value: 22, child: Text('ab 22 kW')),
+              const PopupMenuItem(value: 50, child: Text('ab 50 kW')),
+              const PopupMenuItem(value: 100, child: Text('ab 100 kW')),
+              const PopupMenuItem(value: 150, child: Text('ab 150 kW')),
+              const PopupMenuItem(value: 300, child: Text('ab 300 kW')),
             ],
           ),
         ],
@@ -75,7 +78,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Widget _buildMap(Position position) {
     final chargePoints = ref.watch(nearbyChargePointsProvider(
-      (lat: position.latitude, lng: position.longitude, radius: _searchRadius),
+      (lat: position.latitude, lng: position.longitude, radius: 50, minPowerKw: _minPowerKw),
     ));
 
     final markers = <Marker>{};

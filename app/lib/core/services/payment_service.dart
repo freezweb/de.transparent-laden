@@ -35,7 +35,7 @@ class PaymentService {
       }
 
       Stripe.publishableKey = publishableKey;
-      Stripe.merchantIdentifier = 'merchant.de.einfachladen';
+      Stripe.merchantIdentifier = 'merchant.de.transparent-laden';
       await Stripe.instance.applySettings();
       _initialized = true;
     } catch (e) {
@@ -59,7 +59,7 @@ class PaymentService {
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         setupIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Einfach Laden',
+        merchantDisplayName: 'Transparent Laden',
         style: ThemeMode.system,
       ),
     );
@@ -86,7 +86,7 @@ class PaymentService {
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         setupIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Einfach Laden',
+        merchantDisplayName: 'Transparent Laden',
         style: ThemeMode.system,
       ),
     );
@@ -113,7 +113,7 @@ class PaymentService {
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         setupIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Einfach Laden',
+        merchantDisplayName: 'Transparent Laden',
         googlePay: const PaymentSheetGooglePay(
           merchantCountryCode: 'DE',
           currencyCode: 'EUR',
@@ -145,7 +145,7 @@ class PaymentService {
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         setupIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Einfach Laden',
+        merchantDisplayName: 'Transparent Laden',
         applePay: const PaymentSheetApplePay(
           merchantCountryCode: 'DE',
         ),

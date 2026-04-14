@@ -13,7 +13,7 @@ class ProfileScreen extends ConsumerWidget {
     if (!context.mounted) return;
     showAboutDialog(
       context: context,
-      applicationName: 'Einfach Laden',
+      applicationName: 'Transparent Laden',
       applicationVersion: 'Version ${info.version} (Build ${info.buildNumber})',
       applicationIcon: const Icon(Icons.ev_station, size: 48, color: Colors.green),
       children: [

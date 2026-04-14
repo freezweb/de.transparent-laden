@@ -33,13 +33,32 @@ class ChargePointController extends ApiBaseController
             return $this->failValidationErrors(['lat' => 'Required', 'lng' => 'Required']);
         }
 
+        $minPowerKw = $this->request->getGet('min_power_kw') ? (float) $this->request->getGet('min_power_kw') : null;
+
         $chargePoints = $this->chargePointModel->findNearby($lat, $lng, $radius, $limit);
 
+        $result = [];
         foreach ($chargePoints as &$cp) {
             $cp['connectors'] = $this->connectorModel->getForChargePoint($cp['id']);
+
+            // Filter by minimum charging power if requested
+            if ($minPowerKw !== null) {
+                $hasMatchingConnector = false;
+                foreach ($cp['connectors'] as $conn) {
+                    if ((float) ($conn['power_kw'] ?? 0) >= $minPowerKw) {
+                        $hasMatchingConnector = true;
+                        break;
+                    }
+                }
+                if (! $hasMatchingConnector) {
+                    continue;
+                }
+            }
+
+            $result[] = $cp;
         }
 
-        return $this->respond(['charge_points' => $chargePoints]);
+        return $this->respond(['charge_points' => $result]);
     }
 
     public function show(int $id)

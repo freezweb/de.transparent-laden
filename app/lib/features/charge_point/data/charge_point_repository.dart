@@ -13,13 +13,18 @@ class ChargePointRepository {
   Future<List<Map<String, dynamic>>> getNearby({
     required double lat,
     required double lng,
-    double radius = 10,
+    double radius = 50,
+    double? minPowerKw,
   }) async {
-    final response = await _dio.get('/charge-points/nearby', queryParameters: {
+    final params = <String, dynamic>{
       'lat': lat,
       'lng': lng,
       'radius': radius,
-    });
+    };
+    if (minPowerKw != null) {
+      params['min_power_kw'] = minPowerKw;
+    }
+    final response = await _dio.get('/charge-points/nearby', queryParameters: params);
     return List<Map<String, dynamic>>.from(response.data['charge_points'] ?? []);
   }
 

@@ -16,7 +16,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Einfach Laden'),
+        title: const Text('Transparent Laden'),
         actions: [
           IconButton(
             icon: const Icon(Icons.receipt_long),
