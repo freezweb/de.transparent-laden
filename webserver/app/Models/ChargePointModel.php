@@ -15,7 +15,7 @@ class ChargePointModel extends Model
     protected $allowedFields = [
         'provider_id', 'external_id', 'name', 'address', 'city',
         'postal_code', 'country', 'latitude', 'longitude',
-        'operator_name', 'is_active', 'last_seen_at',
+        'operator_name', 'is_active', 'is_startable', 'last_seen_at',
     ];
 
     public function findNearby(float $lat, float $lng, float $radiusKm = 25, int $limit = 50): array

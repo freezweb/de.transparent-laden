@@ -4,6 +4,7 @@ import 'package:einfach_laden/features/auth/presentation/screens/login_screen.da
 import 'package:einfach_laden/features/auth/presentation/screens/register_screen.dart';
 import 'package:einfach_laden/features/home/presentation/screens/home_screen.dart';
 import 'package:einfach_laden/features/map/presentation/screens/map_screen.dart';
+import 'package:einfach_laden/features/map/presentation/screens/qr_scan_screen.dart';
 import 'package:einfach_laden/features/charging/presentation/screens/charging_screen.dart';
 import 'package:einfach_laden/features/charging/presentation/screens/session_detail_screen.dart';
 import 'package:einfach_laden/features/profile/presentation/screens/profile_screen.dart';
@@ -41,21 +42,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const RegisterScreen(),
       ),
 
-      // Main app with bottom nav
+      // Main app with bottom nav — Map is start screen
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(
             path: '/',
-            builder: (context, state) => const HomeScreen(),
+            builder: (context, state) => const MapScreen(),
           ),
           GoRoute(
-            path: '/map',
-            builder: (context, state) => const MapScreen(),
+            path: '/scan',
+            builder: (context, state) => const QrScanScreen(),
           ),
           GoRoute(
             path: '/charging',
             builder: (context, state) => const ChargingScreen(),
+          ),
+          GoRoute(
+            path: '/dashboard',
+            builder: (context, state) => const HomeScreen(),
           ),
           GoRoute(
             path: '/profile',

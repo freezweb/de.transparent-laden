@@ -60,7 +60,20 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], static function
         $routes->get('nearby', 'ChargePointController::nearby');
         $routes->get('(:num)', 'ChargePointController::show/$1');
         $routes->get('(:num)/pricing', 'ChargePointController::pricing/$1');
+        $routes->get('(:num)/reviews', 'ReviewController::index/$1');
+        $routes->post('(:num)/reviews', 'ReviewController::store/$1');
     });
+
+    // ── Reviews ──
+    $routes->group('reviews', ['filter' => 'jwt'], static function ($routes) {
+        $routes->post('(:num)/images', 'ReviewController::uploadImage/$1');
+    });
+
+    // ── QR Scans ──
+    $routes->post('qr-scans', 'QrScanController::store', ['filter' => 'jwt']);
+
+    // ── Content Reports ──
+    $routes->post('reports', 'ReportController::store', ['filter' => 'jwt']);
 
     // ── Charging Sessions ──
     $routes->group('charging', ['filter' => 'jwt'], static function ($routes) {
@@ -140,5 +153,17 @@ $routes->group('api/v1/admin', ['namespace' => 'App\Controllers\Api\Admin'], sta
         $routes->get('config', 'AdminConfigController::index');
         $routes->get('config/(:segment)', 'AdminConfigController::show/$1');
         $routes->put('config', 'AdminConfigController::update');
+
+        // ── Reviews Moderation ──
+        $routes->get('reviews', 'AdminReviewController::index');
+        $routes->put('reviews/(:num)/moderate', 'AdminReviewController::moderate/$1');
+        $routes->delete('reviews/(:num)', 'AdminReviewController::destroy/$1');
+
+        // ── QR Scan Logs ──
+        $routes->get('qr-scans', 'AdminQrScanController::index');
+
+        // ── Content Reports ──
+        $routes->get('reports', 'AdminReportController::index');
+        $routes->put('reports/(:num)/moderate', 'AdminReportController::moderate/$1');
     });
 });

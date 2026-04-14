@@ -14,19 +14,24 @@ class AppShell extends StatelessWidget {
         onDestinationSelected: (index) => _onItemTapped(index, context),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Start',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map),
             label: 'Karte',
           ),
           NavigationDestination(
+            icon: Icon(Icons.qr_code_scanner_outlined),
+            selectedIcon: Icon(Icons.qr_code_scanner),
+            label: 'Scannen',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.ev_station_outlined),
             selectedIcon: Icon(Icons.ev_station),
             label: 'Laden',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outlined),
@@ -41,9 +46,10 @@ class AppShell extends StatelessWidget {
   int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     if (location == '/') return 0;
-    if (location.startsWith('/map')) return 1;
+    if (location.startsWith('/scan')) return 1;
     if (location.startsWith('/charging')) return 2;
-    if (location.startsWith('/profile')) return 3;
+    if (location.startsWith('/dashboard')) return 3;
+    if (location.startsWith('/profile')) return 4;
     return 0;
   }
 
@@ -52,10 +58,12 @@ class AppShell extends StatelessWidget {
       case 0:
         context.go('/');
       case 1:
-        context.go('/map');
+        context.go('/scan');
       case 2:
         context.go('/charging');
       case 3:
+        context.go('/dashboard');
+      case 4:
         context.go('/profile');
     }
   }

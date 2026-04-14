@@ -33,27 +33,60 @@ class ChargePointController extends ApiBaseController
             return $this->failValidationErrors(['lat' => 'Required', 'lng' => 'Required']);
         }
 
-        $minPowerKw = $this->request->getGet('min_power_kw') ? (float) $this->request->getGet('min_power_kw') : null;
+        $minPowerKw      = $this->request->getGet('min_power_kw') ? (float) $this->request->getGet('min_power_kw') : null;
+        $maxPowerKw      = $this->request->getGet('max_power_kw') ? (float) $this->request->getGet('max_power_kw') : null;
+        $connectorType   = $this->request->getGet('connector_type') ?: null;
+        $currentCategory = $this->request->getGet('current_category') ?: null; // AC or DC
+        $onlyStartable   = $this->request->getGet('only_startable');
 
         $chargePoints = $this->chargePointModel->findNearby($lat, $lng, $radius, $limit);
+
+        // Filter by only_startable at CP level
+        if ($onlyStartable === '1' || $onlyStartable === 'true') {
+            $chargePoints = array_filter($chargePoints, fn($cp) => ! empty($cp['is_startable']));
+        }
 
         $result = [];
         foreach ($chargePoints as &$cp) {
             $cp['connectors'] = $this->connectorModel->getForChargePoint($cp['id']);
 
-            // Filter by minimum charging power if requested
-            if ($minPowerKw !== null) {
-                $hasMatchingConnector = false;
-                foreach ($cp['connectors'] as $conn) {
-                    if ((float) ($conn['power_kw'] ?? 0) >= $minPowerKw) {
-                        $hasMatchingConnector = true;
-                        break;
-                    }
-                }
-                if (! $hasMatchingConnector) {
+            // Apply connector-level filters
+            $hasMatchingConnector = false;
+            foreach ($cp['connectors'] as $conn) {
+                $power = (float) ($conn['power_kw'] ?? 0);
+                $type  = $conn['connector_type'] ?? '';
+
+                // Power range filter
+                if ($minPowerKw !== null && $power < $minPowerKw) {
                     continue;
                 }
+                if ($maxPowerKw !== null && $power > $maxPowerKw) {
+                    continue;
+                }
+
+                // Connector type filter
+                if ($connectorType !== null && strcasecmp($type, $connectorType) !== 0) {
+                    continue;
+                }
+
+                // AC/DC filter: AC typically <= 43 kW (Type2), DC > 43 kW (CCS, CHAdeMO)
+                if ($currentCategory === 'AC' && in_array($type, ['CCS', 'CHAdeMO'])) {
+                    continue;
+                }
+                if ($currentCategory === 'DC' && in_array($type, ['Type2', 'Type1', 'Schuko'])) {
+                    continue;
+                }
+
+                $hasMatchingConnector = true;
+                break;
             }
+
+            if (! $hasMatchingConnector && ($minPowerKw !== null || $maxPowerKw !== null || $connectorType !== null || $currentCategory !== null)) {
+                continue;
+            }
+
+            // Include is_startable in response
+            $cp['is_startable'] = isset($cp['is_startable']) ? (bool) $cp['is_startable'] : null;
 
             $result[] = $cp;
         }
@@ -83,6 +116,7 @@ class ChargePointController extends ApiBaseController
         }
 
         $cp['connectors'] = $connectors;
+        $cp['is_startable'] = isset($cp['is_startable']) ? (bool) $cp['is_startable'] : null;
         return $this->respond(['charge_point' => $cp]);
     }
 

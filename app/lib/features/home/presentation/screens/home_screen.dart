@@ -16,7 +16,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transparent Laden'),
+        title: const Text('Dashboard'),
         actions: [
           IconButton(
             icon: const Icon(Icons.receipt_long),
@@ -73,7 +73,7 @@ class HomeScreen extends ConsumerWidget {
                   child: _QuickActionCard(
                     icon: Icons.map,
                     label: 'Ladepunkt finden',
-                    onTap: () => context.go('/map'),
+                    onTap: () => context.go('/'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -116,7 +116,7 @@ class HomeScreen extends ConsumerWidget {
     return Card(
       color: Theme.of(context).colorScheme.primaryContainer,
       child: InkWell(
-        onTap: () => context.go('/map'),
+        onTap: () => context.go('/'),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(24),

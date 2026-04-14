@@ -15,15 +15,21 @@ class ChargePointRepository {
     required double lng,
     double radius = 50,
     double? minPowerKw,
+    double? maxPowerKw,
+    String? connectorType,
+    String? currentCategory,
+    bool? onlyStartable,
   }) async {
     final params = <String, dynamic>{
       'lat': lat,
       'lng': lng,
       'radius': radius,
     };
-    if (minPowerKw != null) {
-      params['min_power_kw'] = minPowerKw;
-    }
+    if (minPowerKw != null) params['min_power_kw'] = minPowerKw;
+    if (maxPowerKw != null) params['max_power_kw'] = maxPowerKw;
+    if (connectorType != null) params['connector_type'] = connectorType;
+    if (currentCategory != null) params['current_category'] = currentCategory;
+    if (onlyStartable == true) params['only_startable'] = 1;
     final response = await _dio.get('/charge-points/nearby', queryParameters: params);
     return List<Map<String, dynamic>>.from(response.data['charge_points'] ?? []);
   }
@@ -35,6 +41,55 @@ class ChargePointRepository {
 
   Future<Map<String, dynamic>> getPricing(int connectorId) async {
     final response = await _dio.get('/charge-points/$connectorId/pricing');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> getReviews(int chargePointId) async {
+    final response = await _dio.get('/charge-points/$chargePointId/reviews');
+    return List<Map<String, dynamic>>.from(response.data['reviews'] ?? []);
+  }
+
+  Future<Map<String, dynamic>> submitReview({
+    required int chargePointId,
+    required int rating,
+    String? comment,
+  }) async {
+    final response = await _dio.post('/charge-points/$chargePointId/reviews', data: {
+      'rating': rating,
+      'comment': comment,
+    });
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> uploadReviewImage(int reviewId, List<int> imageBytes, String filename) async {
+    final formData = FormData.fromMap({
+      'image': MultipartFile.fromBytes(imageBytes, filename: filename),
+    });
+    await _dio.post('/reviews/$reviewId/images', data: formData);
+  }
+
+  Future<void> reportContent({
+    required String entityType,
+    required int entityId,
+    required String reason,
+  }) async {
+    await _dio.post('/reports', data: {
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'reason': reason,
+    });
+  }
+
+  Future<Map<String, dynamic>> logQrScan({
+    required String qrContent,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final response = await _dio.post('/qr-scans', data: {
+      'qr_content': qrContent,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+    });
     return response.data as Map<String, dynamic>;
   }
 }
