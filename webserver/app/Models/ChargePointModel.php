@@ -32,6 +32,19 @@ class ChargePointModel extends Model
         return $this->db->query($sql, [$lat, $lng, $lat, $radiusKm, $limit])->getResultArray();
     }
 
+    public function findByBoundingBox(float $latMin, float $lngMin, float $latMax, float $lngMax, int $limit = 200): array
+    {
+        return $this->where('is_active', 1)
+                     ->where('latitude >=', $latMin)
+                     ->where('latitude <=', $latMax)
+                     ->where('longitude >=', $lngMin)
+                     ->where('longitude <=', $lngMax)
+                     ->where('latitude IS NOT NULL')
+                     ->where('longitude IS NOT NULL')
+                     ->limit($limit)
+                     ->findAll();
+    }
+
     public function findByProviderAndExternalId(int $providerId, string $externalId): ?array
     {
         return $this->where('provider_id', $providerId)

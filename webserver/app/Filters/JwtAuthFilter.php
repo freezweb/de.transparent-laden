@@ -30,9 +30,9 @@ class JwtAuthFilter implements FilterInterface
         }
 
         // Store user data in request for controllers
-        $request->userId    = $decoded->sub;
-        $request->userEmail = $decoded->email ?? '';
-        $request->userRole  = $decoded->role ?? 'user';
+        $request->userId    = $decoded->sub ?? 0;
+        $request->userEmail = isset($decoded->email) ? $decoded->email : '';
+        $request->userRole  = isset($decoded->role) ? $decoded->role : 'user';
 
         return $request;
     }

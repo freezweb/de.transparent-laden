@@ -18,6 +18,24 @@ final nearbyChargePointsProvider =
   },
 );
 
+final bboxChargePointsProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, ({double latMin, double lngMin, double latMax, double lngMax, double? minPowerKw, double? maxPowerKw, String? connectorType, String? currentCategory, bool? onlyStartable})>(
+  (ref, params) async {
+    final repo = ref.watch(chargePointRepositoryProvider);
+    return repo.getByBoundingBox(
+      latMin: params.latMin,
+      lngMin: params.lngMin,
+      latMax: params.latMax,
+      lngMax: params.lngMax,
+      minPowerKw: params.minPowerKw,
+      maxPowerKw: params.maxPowerKw,
+      connectorType: params.connectorType,
+      currentCategory: params.currentCategory,
+      onlyStartable: params.onlyStartable,
+    );
+  },
+);
+
 final chargePointDetailProvider = FutureProvider.family<Map<String, dynamic>, int>(
   (ref, id) {
     final repo = ref.watch(chargePointRepositoryProvider);

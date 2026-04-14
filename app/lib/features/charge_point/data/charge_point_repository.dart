@@ -34,6 +34,32 @@ class ChargePointRepository {
     return List<Map<String, dynamic>>.from(response.data['charge_points'] ?? []);
   }
 
+  Future<List<Map<String, dynamic>>> getByBoundingBox({
+    required double latMin,
+    required double lngMin,
+    required double latMax,
+    required double lngMax,
+    double? minPowerKw,
+    double? maxPowerKw,
+    String? connectorType,
+    String? currentCategory,
+    bool? onlyStartable,
+  }) async {
+    final params = <String, dynamic>{
+      'lat_min': latMin,
+      'lng_min': lngMin,
+      'lat_max': latMax,
+      'lng_max': lngMax,
+    };
+    if (minPowerKw != null) params['min_power_kw'] = minPowerKw;
+    if (maxPowerKw != null) params['max_power_kw'] = maxPowerKw;
+    if (connectorType != null) params['connector_type'] = connectorType;
+    if (currentCategory != null) params['current_category'] = currentCategory;
+    if (onlyStartable == true) params['only_startable'] = 1;
+    final response = await _dio.get('/charge-points/nearby', queryParameters: params);
+    return List<Map<String, dynamic>>.from(response.data['charge_points'] ?? []);
+  }
+
   Future<Map<String, dynamic>> getDetail(int id) async {
     final response = await _dio.get('/charge-points/$id');
     return response.data as Map<String, dynamic>;

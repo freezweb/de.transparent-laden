@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:einfach_laden/features/charge_point/providers/charge_point_provider.dart';
+import 'package:einfach_laden/features/charge_point/data/charge_point_repository.dart';
 
 final userLocationProvider = FutureProvider<Position>((ref) async {
   final permission = await Geolocator.checkPermission();
@@ -36,6 +37,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String? _currentCategory;
   bool _showFilterSheet = false;
 
+  // Current visible bounds for bbox loading
+  LatLngBounds? _currentBounds;
+  List<Map<String, dynamic>> _stations = [];
+  bool _loading = false;
+
   bool get _hasActiveFilters =>
       _minPowerKw != null || _maxPowerKw != null || _connectorType != null ||
       _onlyStartable == true || _currentCategory != null;
@@ -44,6 +50,55 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void dispose() {
     _mapController?.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadStationsForBounds(LatLngBounds bounds) async {
+    if (_loading) return;
+    setState(() => _loading = true);
+
+    try {
+      final repo = ref.read(chargePointRepositoryProvider);
+      final data = await repo.getByBoundingBox(
+        latMin: bounds.southwest.latitude,
+        lngMin: bounds.southwest.longitude,
+        latMax: bounds.northeast.latitude,
+        lngMax: bounds.northeast.longitude,
+        minPowerKw: _minPowerKw,
+        maxPowerKw: _maxPowerKw,
+        connectorType: _connectorType,
+        currentCategory: _currentCategory,
+        onlyStartable: _onlyStartable,
+      );
+      if (mounted) {
+        setState(() {
+          _stations = data;
+          _currentBounds = bounds;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _onCameraIdle() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    final bounds = await controller.getVisibleRegion();
+    // Only reload if bounds changed significantly
+    if (_currentBounds == null || _boundsChangedSignificantly(bounds)) {
+      _loadStationsForBounds(bounds);
+    }
+  }
+
+  bool _boundsChangedSignificantly(LatLngBounds newBounds) {
+    if (_currentBounds == null) return true;
+    final old = _currentBounds!;
+    const threshold = 0.005; // ~500m
+    return (old.southwest.latitude - newBounds.southwest.latitude).abs() > threshold ||
+        (old.southwest.longitude - newBounds.southwest.longitude).abs() > threshold ||
+        (old.northeast.latitude - newBounds.northeast.latitude).abs() > threshold ||
+        (old.northeast.longitude - newBounds.northeast.longitude).abs() > threshold;
   }
 
   @override
@@ -73,6 +128,42 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
 
+          // Loading indicator
+          if (_loading)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 70,
+              left: 0, right: 0,
+              child: const Center(
+                child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+            ),
+
+          // Station count
+          if (_stations.isNotEmpty)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 64,
+              right: 12,
+              child: Material(
+                elevation: 2,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    '${_stations.length} Stationen',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // Top search bar
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
@@ -86,7 +177,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             Positioned(
               top: MediaQuery.of(context).padding.top + 64,
               left: 12,
-              right: 12,
+              right: _stations.isNotEmpty ? 120 : 12,
               child: _buildActiveFilterChips(),
             ),
 
@@ -192,6 +283,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   onPressed: () => setState(() {
                     _minPowerKw = null; _maxPowerKw = null;
                     _connectorType = null; _onlyStartable = null; _currentCategory = null;
+                    _currentBounds = null; // force reload
                   }),
                   child: const Text('Zurücksetzen'),
                 ),
@@ -232,7 +324,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () => setState(() => _showFilterSheet = false),
+                onPressed: () {
+                  setState(() => _showFilterSheet = false);
+                  _currentBounds = null; // force reload with new filters
+                  _onCameraIdle();
+                },
                 child: const Text('Filter anwenden'),
               ),
             ),
@@ -267,74 +363,89 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            _LegendItem(color: Colors.blue, label: 'AC (≤22 kW)'),
+            SizedBox(height: 4),
+            _LegendItem(color: Colors.orange, label: 'DC (50 kW)'),
+            SizedBox(height: 4),
+            _LegendItem(color: Colors.deepPurple, label: 'HPC (≥150 kW)'),
+            SizedBox(height: 4),
             _LegendItem(color: Colors.green, label: 'Über uns startbar'),
             SizedBox(height: 4),
-            _LegendItem(color: Colors.orange, label: 'Sichtbar, nicht startbar'),
-            SizedBox(height: 4),
-            _LegendItem(color: Colors.grey, label: 'Status unklar'),
+            _LegendItem(color: Colors.red, label: 'Nicht startbar'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMap(Position position) {
-    final chargePoints = ref.watch(nearbyChargePointsProvider((
-      lat: position.latitude,
-      lng: position.longitude,
-      radius: 50,
-      minPowerKw: _minPowerKw,
-      maxPowerKw: _maxPowerKw,
-      connectorType: _connectorType,
-      currentCategory: _currentCategory,
-      onlyStartable: _onlyStartable,
-    )));
+  /// Determine marker hue based on max connector power.
+  double _markerHueForPower(double maxPowerKw, bool isStartable) {
+    // Startable stations get green
+    if (isStartable) return BitmapDescriptor.hueGreen;
+    // Speed-based colors
+    if (maxPowerKw >= 150) return BitmapDescriptor.hueViolet;   // HPC: purple
+    if (maxPowerKw >= 43)  return BitmapDescriptor.hueOrange;   // DC: orange
+    return BitmapDescriptor.hueAzure;                            // AC: blue
+  }
 
+  Widget _buildMap(Position position) {
     final markers = <Marker>{};
 
-    chargePoints.whenData((points) {
-      for (final cp in points) {
-        final lat = double.tryParse(cp['latitude']?.toString() ?? '');
-        final lng = double.tryParse(cp['longitude']?.toString() ?? '');
-        if (lat != null && lng != null) {
-          final bool isStartable = cp['is_startable'] == true || cp['is_startable'] == 1;
-          final bool statusKnown = cp['status_known'] != false && cp['status_known'] != 0;
+    for (final cp in _stations) {
+      final lat = double.tryParse(cp['latitude']?.toString() ?? '');
+      final lng = double.tryParse(cp['longitude']?.toString() ?? '');
+      if (lat == null || lng == null) continue;
 
-          double hue;
-          if (!statusKnown) {
-            hue = BitmapDescriptor.hueAzure;
-          } else if (isStartable) {
-            hue = BitmapDescriptor.hueGreen;
-          } else {
-            hue = BitmapDescriptor.hueOrange;
-          }
+      final bool isStartable = cp['is_startable'] == true || cp['is_startable'] == 1;
+      final bool isExternal = cp['source'] == 'osm';
+      final double maxPower = (cp['max_power_kw'] is num ? (cp['max_power_kw'] as num).toDouble() : 0);
 
-          markers.add(Marker(
-            markerId: MarkerId('cp_${cp['id']}'),
-            position: LatLng(lat, lng),
-            infoWindow: InfoWindow(
-              title: cp['name'] ?? 'Ladepunkt',
-              snippet: isStartable
-                  ? '${cp['operator_name'] ?? ''} • Startbar'
-                  : cp['operator_name'] ?? '',
-              onTap: () => context.push('/charge-point/${cp['id']}'),
-            ),
-            icon: BitmapDescriptor.defaultMarkerWithHue(hue),
-          ));
-        }
+      double hue;
+      if (isStartable) {
+        hue = BitmapDescriptor.hueGreen;
+      } else if (isExternal && maxPower <= 0) {
+        hue = BitmapDescriptor.hueRed;
+      } else {
+        hue = _markerHueForPower(maxPower, false);
       }
-    });
+
+      final cpId = cp['id']?.toString() ?? 'osm_${cp['osm_id']}';
+      final operatorName = cp['operator_name'] ?? '';
+      final name = cp['name'] ?? 'Ladepunkt';
+
+      String snippet = operatorName;
+      if (maxPower > 0) snippet += ' • ${maxPower.toInt()} kW';
+      if (isStartable) snippet += ' • Startbar ✓';
+
+      markers.add(Marker(
+        markerId: MarkerId('cp_$cpId'),
+        position: LatLng(lat, lng),
+        infoWindow: InfoWindow(
+          title: name,
+          snippet: snippet,
+          onTap: isExternal
+              ? null
+              : () => context.push('/charge-point/$cpId'),
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(hue),
+      ));
+    }
 
     return GoogleMap(
       initialCameraPosition: CameraPosition(
         target: LatLng(position.latitude, position.longitude),
-        zoom: 13,
+        zoom: 14,
       ),
       myLocationEnabled: true,
       myLocationButtonEnabled: true,
       zoomControlsEnabled: false,
       markers: markers,
-      onMapCreated: (controller) { _mapController = controller; },
+      onMapCreated: (controller) {
+        _mapController = controller;
+        // Load initial stations after map created
+        Future.delayed(const Duration(milliseconds: 500), _onCameraIdle);
+      },
+      onCameraIdle: _onCameraIdle,
     );
   }
 }

@@ -53,19 +53,25 @@ class NotificationPreferenceController extends ApiBaseController
 
     public function update()
     {
-        $rules = [
-            'preferences'              => 'required',
-            'preferences.*.event_type' => 'required|in_list[session_started,session_completed,session_failed,cost_threshold,invoice_created,subscription_expiring,subscription_cancelled]',
-            'preferences.*.enabled'    => 'required|in_list[0,1,true,false]',
-        ];
-
-        if (! $this->validate($rules)) {
-            return $this->failValidationErrors($this->validator->getErrors());
-        }
-
         $data = $this->request->getJSON(true);
 
+        if (! isset($data['preferences']) || ! is_array($data['preferences'])) {
+            return $this->failValidationErrors(['preferences' => 'Preferences array is required']);
+        }
+
+        $validEventTypes = [
+            'session_started', 'session_completed', 'session_failed',
+            'cost_threshold', 'invoice_created',
+            'subscription_expiring', 'subscription_cancelled',
+        ];
+
         foreach ($data['preferences'] as $pref) {
+            if (! isset($pref['event_type']) || ! in_array($pref['event_type'], $validEventTypes, true)) {
+                return $this->failValidationErrors(['event_type' => 'Invalid event type']);
+            }
+            if (! array_key_exists('enabled', $pref)) {
+                return $this->failValidationErrors(['enabled' => 'Enabled field is required']);
+            }
             $this->prefModel->setPreference(
                 $this->userId,
                 $pref['event_type'],
