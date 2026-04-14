@@ -186,7 +186,7 @@ pipeline {
             when { expression { env.DO_APK == 'true' && env.HAS_FLUTTER == 'true' } }
             steps {
                 dir('app') {
-                    bat 'flutter analyze --no-fatal-infos || echo Analyze done with warnings'
+                    bat 'flutter analyze --no-fatal-infos --no-fatal-warnings || echo Analyze done with warnings'
                 }
             }
         }

@@ -41,6 +41,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _onlyStartable == true || _currentCategory != null;
 
   @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final location = ref.watch(userLocationProvider);
 
@@ -328,7 +334,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       myLocationButtonEnabled: true,
       zoomControlsEnabled: false,
       markers: markers,
-      onMapCreated: (controller) => _mapController = controller,
+      onMapCreated: (controller) { _mapController = controller; },
     );
   }
 }
