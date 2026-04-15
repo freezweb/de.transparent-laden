@@ -66,6 +66,7 @@ class ProfileScreen extends ConsumerWidget {
               _MenuItem(icon: Icons.person, label: 'Profil bearbeiten', onTap: () => context.push('/profile/edit')),
               _MenuItem(icon: Icons.lock, label: 'Passwort ändern', onTap: () => context.push('/profile/password')),
               _MenuItem(icon: Icons.payment, label: 'Zahlungsmethoden', onTap: () => context.push('/profile/payment-methods')),
+              _MenuItem(icon: Icons.electric_car, label: 'Fahrzeug', onTap: () => context.push('/profile/vehicle')),
             ],
           ),
 

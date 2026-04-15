@@ -65,6 +65,16 @@ class ChargePointRepository {
     return response.data as Map<String, dynamic>;
   }
 
+  /// Fetch only dynamic status for a list of local station IDs.
+  Future<Map<String, Map<String, dynamic>>> getStatus(List<int> ids) async {
+    if (ids.isEmpty) return {};
+    final response = await _dio.get('/charge-points/status', queryParameters: {
+      'ids': ids.join(','),
+    });
+    final data = response.data['statuses'] as Map<String, dynamic>? ?? {};
+    return data.map((k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)));
+  }
+
   Future<Map<String, dynamic>> getPricing(int connectorId) async {
     final response = await _dio.get('/charge-points/$connectorId/pricing');
     return response.data as Map<String, dynamic>;

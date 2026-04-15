@@ -15,6 +15,8 @@ import 'package:einfach_laden/features/charge_point/presentation/screens/charge_
 import 'package:einfach_laden/features/profile/presentation/screens/payment_methods_screen.dart';
 import 'package:einfach_laden/features/profile/presentation/screens/subscription_screen.dart';
 import 'package:einfach_laden/features/profile/presentation/screens/notification_settings_screen.dart';
+import 'package:einfach_laden/features/vehicle/presentation/screens/vehicle_config_screen.dart';
+import 'package:einfach_laden/features/charge_point/presentation/screens/external_station_info_screen.dart';
 import 'package:einfach_laden/features/auth/providers/auth_provider.dart';
 import 'package:einfach_laden/core/widgets/app_shell.dart';
 
@@ -105,6 +107,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile/notifications',
         builder: (context, state) => const NotificationSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/vehicle',
+        builder: (context, state) => const VehicleConfigScreen(),
+      ),
+      GoRoute(
+        path: '/station-info/:id',
+        builder: (context, state) {
+          final station = state.extra as Map<String, dynamic>? ?? {};
+          return ExternalStationInfoScreen(station: station);
+        },
       ),
     ],
   );

@@ -185,6 +185,60 @@ class ChargePointController extends ApiBaseController
         return $this->respond(['charge_point' => $cp]);
     }
 
+    /**
+     * GET /charge-points/status?ids=1,2,3
+     * Returns only dynamic status data for known local stations.
+     */
+    public function status()
+    {
+        $idsParam = $this->request->getGet('ids');
+        if (empty($idsParam)) {
+            return $this->failValidationErrors(['ids' => 'Required (comma-separated)']);
+        }
+
+        $ids = array_filter(array_map('intval', explode(',', $idsParam)));
+        if (empty($ids)) {
+            return $this->respond(['statuses' => new \stdClass()]);
+        }
+
+        // Limit to 100 IDs per request
+        $ids = array_slice($ids, 0, 100);
+
+        $statuses = [];
+        foreach ($ids as $id) {
+            $connectors = $this->connectorModel->getForChargePoint($id);
+            $total = count($connectors);
+            $available = 0;
+            $occupied = 0;
+            $outOfService = 0;
+            foreach ($connectors as $c) {
+                $s = $c['status'] ?? 'unknown';
+                if ($s === 'available') $available++;
+                elseif ($s === 'occupied') $occupied++;
+                elseif ($s === 'out_of_service') $outOfService++;
+            }
+
+            $cp = $this->chargePointModel->find($id);
+
+            $statuses[(string)$id] = [
+                'total_connectors'     => $total,
+                'available_connectors' => $available,
+                'occupied_connectors'  => $occupied,
+                'out_of_service'       => $outOfService,
+                'is_startable'         => isset($cp['is_startable']) ? (bool) $cp['is_startable'] : false,
+                'last_status_update'   => $connectors[0]['last_status_update'] ?? null,
+                'connectors'           => array_map(fn($c) => [
+                    'id'             => $c['id'],
+                    'connector_type' => $c['connector_type'],
+                    'power_kw'       => $c['power_kw'],
+                    'status'         => $c['status'] ?? 'unknown',
+                ], $connectors),
+            ];
+        }
+
+        return $this->respond(['statuses' => $statuses]);
+    }
+
     public function pricing(int $connectorId)
     {
         $connector = $this->connectorModel->find($connectorId);

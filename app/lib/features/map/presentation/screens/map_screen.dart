@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:einfach_laden/features/charge_point/data/charge_point_repository.dart';
 import 'package:einfach_laden/features/map/presentation/widgets/marker_generator.dart';
+import 'package:einfach_laden/features/map/presentation/widgets/map_legend.dart';
+import 'package:einfach_laden/features/map/presentation/widgets/station_bottom_sheet.dart';
+import 'package:einfach_laden/core/services/station_cache_service.dart';
 
 final userLocationProvider = FutureProvider<Position>((ref) async {
   final permission = await Geolocator.checkPermission();
@@ -28,6 +32,7 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   GoogleMapController? _mapController;
+  Timer? _statusTimer;
 
   // Filter state
   double? _minPowerKw;
@@ -36,26 +41,61 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool? _onlyStartable;
   String? _currentCategory;
   bool _showFilterSheet = false;
+  bool _showLegend = false;
 
-  // Persistent station cache — stations accumulate, never removed on pan
-  final Map<String, Map<String, dynamic>> _stationCache = {};
   Map<String, Marker> _markerCache = {};
   LatLngBounds? _lastLoadedBounds;
   bool _loading = false;
+  bool _cacheInitialized = false;
 
   bool get _hasActiveFilters =>
       _minPowerKw != null || _maxPowerKw != null || _connectorType != null ||
       _onlyStartable == true || _currentCategory != null;
 
+  StationCacheService get _cache => ref.read(stationCacheServiceProvider);
+
+  @override
+  void initState() {
+    super.initState();
+    _initCache();
+    // Refresh dynamic status every 2 minutes
+    _statusTimer = Timer.periodic(
+      StationCacheService.statusRefreshInterval,
+      (_) => _refreshStatus(),
+    );
+  }
+
+  Future<void> _initCache() async {
+    await _cache.init();
+    if (mounted) setState(() => _cacheInitialized = true);
+  }
+
   @override
   void dispose() {
+    _statusTimer?.cancel();
+    _cache.persist();
     _mapController?.dispose();
     super.dispose();
   }
 
-  String _stationKey(Map<String, dynamic> cp) {
-    if (cp['source'] == 'osm') return 'osm_${cp['osm_id']}';
-    return 'local_${cp['id']}';
+  /// Refresh only dynamic status for stale local stations.
+  Future<void> _refreshStatus() async {
+    final staleIds = _cache.getStaleLocalStationIds();
+    if (staleIds.isEmpty) return;
+
+    try {
+      final repo = ref.read(chargePointRepositoryProvider);
+      // Batch in groups of 100
+      for (var i = 0; i < staleIds.length; i += 100) {
+        final batch = staleIds.sublist(i, (i + 100).clamp(0, staleIds.length));
+        final statusMap = await repo.getStatus(batch);
+        _cache.updateStatus(statusMap);
+      }
+      await _rebuildMarkers();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Silent fail — will retry on next interval
+    }
   }
 
   Future<void> _loadStationsForBounds(LatLngBounds bounds) async {
@@ -76,12 +116,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         onlyStartable: _onlyStartable,
       );
 
-      // Merge into persistent cache — never remove old stations
-      for (final cp in data) {
-        final key = _stationKey(cp);
-        _stationCache[key] = cp;
-      }
-
+      // Merge into persistent cache
+      _cache.mergeStations(data);
       await _rebuildMarkers();
 
       if (mounted) {
@@ -96,9 +132,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _rebuildMarkers() async {
+    final allStations = _cache.getAllStations();
     final newMarkers = <String, Marker>{};
 
-    for (final entry in _stationCache.entries) {
+    for (final entry in allStations.entries) {
       final key = entry.key;
       final cp = entry.value;
 
@@ -108,6 +145,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
       final bool isStartable = cp['is_startable'] == true || cp['is_startable'] == 1;
       final bool isExternal = cp['source'] == 'osm';
+      final bool statusKnown = cp['status_known'] != false;
       final double maxPower = cp['max_power_kw'] is num
           ? (cp['max_power_kw'] as num).toDouble()
           : 0;
@@ -118,45 +156,38 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ? (cp['total_connectors'] as num).toInt()
           : 0;
 
-      // Green ONLY if startable through us AND has free connector
-      final bool hasFreeSpot = isStartable && available > 0;
+      final color = MarkerGenerator.markerColor(
+        isStartable: isStartable,
+        isExternal: isExternal,
+        statusKnown: statusKnown,
+        available: available,
+        total: total,
+      );
 
       final icon = await MarkerGenerator.getMarker(
         maxPowerKw: maxPower,
-        isStartable: isStartable,
-        hasFreeSpot: hasFreeSpot,
-        isExternal: isExternal,
+        color: color,
       );
-
-      final operatorName = cp['operator_name']?.toString() ?? '';
-      final name = cp['name']?.toString() ?? 'Ladepunkt';
-
-      // Build snippet with availability info
-      final parts = <String>[];
-      if (operatorName.isNotEmpty) parts.add(operatorName);
-      if (maxPower > 0) parts.add('${maxPower.toInt()} kW');
-      final bolts = MarkerGenerator.boltCount(maxPower);
-      parts.add('${'⚡' * bolts}');
-      if (!isExternal && total > 0) {
-        parts.add('$available/$total frei');
-      }
-      if (hasFreeSpot) parts.add('Startbar ✓');
-
-      final cpId = cp['id']?.toString() ?? cp['osm_id']?.toString() ?? key;
 
       newMarkers[key] = Marker(
         markerId: MarkerId(key),
         position: LatLng(lat, lng),
-        infoWindow: InfoWindow(
-          title: name,
-          snippet: parts.join(' • '),
-          onTap: isExternal ? null : () => context.push('/charge-point/$cpId'),
-        ),
+        infoWindow: InfoWindow.noText,
         icon: icon,
+        onTap: () => _showStationSheet(cp),
       );
     }
 
     _markerCache = newMarkers;
+  }
+
+  void _showStationSheet(Map<String, dynamic> station) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StationBottomSheet(station: station),
+    );
   }
 
   void _onCameraIdle() async {
@@ -171,7 +202,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _boundsNeedReload(LatLngBounds newBounds) {
     if (_lastLoadedBounds == null) return true;
     final old = _lastLoadedBounds!;
-    // Reload when viewport extends beyond previously loaded area
     return newBounds.southwest.latitude < old.southwest.latitude - 0.002 ||
         newBounds.southwest.longitude < old.southwest.longitude - 0.002 ||
         newBounds.northeast.latitude > old.northeast.latitude + 0.002 ||
@@ -179,7 +209,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   void _clearAndReload() {
-    _stationCache.clear();
     _markerCache.clear();
     _lastLoadedBounds = null;
     _onCameraIdle();
@@ -223,7 +252,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
 
           // Station count badge
-          if (_stationCache.isNotEmpty)
+          if (_cache.stationCount > 0)
             Positioned(
               top: MediaQuery.of(context).padding.top + 64,
               right: 12,
@@ -237,7 +266,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    '${_stationCache.length} Stationen',
+                    '${_cache.stationCount} Stationen',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -261,15 +290,45 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             Positioned(
               top: MediaQuery.of(context).padding.top + 64,
               left: 12,
-              right: _stationCache.isNotEmpty ? 120 : 12,
+              right: _cache.stationCount > 0 ? 120 : 12,
               child: _buildActiveFilterChips(),
             ),
 
-          // Legend
+          // Legend toggle button
           Positioned(
             bottom: 16,
             left: 12,
-            child: _buildLegend(context),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_showLegend) const MapLegend(),
+                if (_showLegend) const SizedBox(height: 6),
+                Material(
+                  elevation: 2,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => setState(() => _showLegend = !_showLegend),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_showLegend ? Icons.close : Icons.info_outline, size: 16),
+                          const SizedBox(width: 4),
+                          Text(_showLegend ? 'Legende' : 'Legende', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
           // Filter sheet
@@ -434,33 +493,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap(), visualDensity: VisualDensity.compact);
   }
 
-  Widget _buildLegend(BuildContext context) {
-    return Material(
-      elevation: 2,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withAlpha(230),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _LegendItem(icon: '⚡', color: Color(0xFF2E7D32), label: 'Frei & startbar'),
-            SizedBox(height: 3),
-            _LegendItem(icon: '⚡', color: Color(0xFF616161), label: 'AC (≤22 kW)'),
-            SizedBox(height: 3),
-            _LegendItem(icon: '⚡⚡', color: Color(0xFF616161), label: 'DC (50+ kW)'),
-            SizedBox(height: 3),
-            _LegendItem(icon: '⚡⚡⚡', color: Color(0xFF616161), label: 'HPC (150+ kW)'),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildMap(Position position) {
     return GoogleMap(
       initialCameraPosition: CameraPosition(
@@ -476,31 +508,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         Future.delayed(const Duration(milliseconds: 500), _onCameraIdle);
       },
       onCameraIdle: _onCameraIdle,
-    );
-  }
-}
-
-class _LegendItem extends StatelessWidget {
-  final String icon;
-  final Color color;
-  final String label;
-  const _LegendItem({required this.icon, required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 20,
-          alignment: Alignment.center,
-          child: Text(icon, style: const TextStyle(fontSize: 10)),
-        ),
-        const SizedBox(width: 4),
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11)),
-      ],
     );
   }
 }

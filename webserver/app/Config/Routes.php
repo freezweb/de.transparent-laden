@@ -58,6 +58,7 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], static function
     // ── Charge Points ──
     $routes->group('charge-points', ['filter' => 'jwt'], static function ($routes) {
         $routes->get('nearby', 'ChargePointController::nearby');
+        $routes->get('status', 'ChargePointController::status');
         $routes->get('(:num)', 'ChargePointController::show/$1');
         $routes->get('(:num)/pricing', 'ChargePointController::pricing/$1');
         $routes->get('(:num)/reviews', 'ReviewController::index/$1');
