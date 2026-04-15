@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:einfach_laden/features/charge_point/data/charge_point_repository.dart';
@@ -46,7 +45,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Map<String, Marker> _markerCache = {};
   LatLngBounds? _lastLoadedBounds;
   bool _loading = false;
-  bool _cacheInitialized = false;
 
   bool get _hasActiveFilters =>
       _minPowerKw != null || _maxPowerKw != null || _connectorType != null ||
@@ -67,7 +65,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Future<void> _initCache() async {
     await _cache.init();
-    if (mounted) setState(() => _cacheInitialized = true);
+    if (mounted) setState(() {});
   }
 
   @override
