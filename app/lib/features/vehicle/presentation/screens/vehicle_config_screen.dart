@@ -12,6 +12,104 @@ class VehicleConfigScreen extends ConsumerStatefulWidget {
 class _VehicleConfigScreenState extends ConsumerState<VehicleConfigScreen> {
   String _search = '';
 
+  Future<void> _showCustomVehicleDialog() async {
+    final batteryController = TextEditingController();
+    final dcController = TextEditingController();
+    final nameController = TextEditingController();
+    final selected = ref.read(selectedVehicleProvider);
+    if (selected != null && selected.isCustom) {
+      nameController.text = selected.manufacturer;
+      batteryController.text = selected.batteryCapacityKwh.toStringAsFixed(0);
+      dcController.text = selected.maxDcKw.toStringAsFixed(0);
+    }
+
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<EvVehicle>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fahrzeug manuell eingeben'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name (optional)',
+                  hintText: 'z.B. Polestar 4',
+                  prefixIcon: Icon(Icons.label_outline),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: batteryController,
+                decoration: const InputDecoration(
+                  labelText: 'Akkukapazität (kWh)',
+                  hintText: 'z.B. 100',
+                  prefixIcon: Icon(Icons.battery_full),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Bitte eingeben';
+                  final n = double.tryParse(v.replaceAll(',', '.'));
+                  if (n == null || n <= 0 || n > 300) return 'Ungültiger Wert';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: dcController,
+                decoration: const InputDecoration(
+                  labelText: 'Max. Ladeleistung DC (kW)',
+                  hintText: 'z.B. 200',
+                  prefixIcon: Icon(Icons.bolt),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Bitte eingeben';
+                  final n = double.tryParse(v.replaceAll(',', '.'));
+                  if (n == null || n <= 0 || n > 500) return 'Ungültiger Wert';
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              final battery = double.parse(batteryController.text.replaceAll(',', '.'));
+              final dc = double.parse(dcController.text.replaceAll(',', '.'));
+              final name = nameController.text.trim();
+              Navigator.pop(ctx, EvVehicle.custom(
+                batteryCapacityKwh: battery,
+                maxDcKw: dc,
+                name: name.isNotEmpty ? name : null,
+              ));
+            },
+            child: const Text('Speichern'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      ref.read(selectedVehicleProvider.notifier).select(result);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${result.displayName} gespeichert'), duration: const Duration(seconds: 1)),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final selected = ref.watch(selectedVehicleProvider);
@@ -58,9 +156,18 @@ class _VehicleConfigScreenState extends ConsumerState<VehicleConfigScreen> {
                             style: Theme.of(context).textTheme.bodySmall),
                         Text('10%→80%: ${selected.energyFor10To80.toStringAsFixed(1)} kWh',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                        if (selected.isCustom)
+                          Text('Manuell konfiguriert',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.tertiary)),
                       ],
                     ),
                   ),
+                  if (selected.isCustom)
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: _showCustomVehicleDialog,
+                      tooltip: 'Bearbeiten',
+                    ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => ref.read(selectedVehicleProvider.notifier).select(null),
@@ -87,7 +194,21 @@ class _VehicleConfigScreenState extends ConsumerState<VehicleConfigScreen> {
 
           const SizedBox(height: 8),
 
-          // Vehicle list
+          // Manual entry button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: OutlinedButton.icon(
+              onPressed: _showCustomVehicleDialog,
+              icon: const Icon(Icons.edit),
+              label: const Text('Fahrzeug nicht dabei? Manuell eingeben'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 44),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
           Expanded(
             child: ListView.builder(
               itemCount: manufacturers.length,

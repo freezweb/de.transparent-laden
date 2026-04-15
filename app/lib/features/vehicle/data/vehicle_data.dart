@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,7 +22,39 @@ class EvVehicle {
     required this.maxDcKw,
   });
 
-  String get displayName => '$manufacturer $model';
+  /// Create a custom vehicle from manual user input.
+  factory EvVehicle.custom({
+    required double batteryCapacityKwh,
+    required double maxDcKw,
+    double? maxAcKw,
+    String? name,
+  }) {
+    return EvVehicle(
+      id: 'custom',
+      manufacturer: name ?? 'Eigenes Fahrzeug',
+      model: '',
+      batteryCapacityKwh: batteryCapacityKwh,
+      usableCapacityKwh: batteryCapacityKwh * 0.95,
+      maxAcKw: maxAcKw ?? 11,
+      maxDcKw: maxDcKw,
+    );
+  }
+
+  factory EvVehicle.fromJson(Map<String, dynamic> json) {
+    return EvVehicle(
+      id: json['id'] as String,
+      manufacturer: json['manufacturer'] as String,
+      model: json['model'] as String,
+      batteryCapacityKwh: (json['battery_capacity_kwh'] as num).toDouble(),
+      usableCapacityKwh: (json['usable_capacity_kwh'] as num).toDouble(),
+      maxAcKw: (json['max_ac_kw'] as num).toDouble(),
+      maxDcKw: (json['max_dc_kw'] as num).toDouble(),
+    );
+  }
+
+  bool get isCustom => id == 'custom';
+
+  String get displayName => model.isEmpty ? manufacturer : '$manufacturer $model';
 
   /// Energy needed for 10% → 80% charge.
   double get energyFor10To80 => usableCapacityKwh * 0.7;
@@ -97,6 +131,7 @@ final selectedVehicleProvider = StateNotifierProvider<SelectedVehicleNotifier, E
 
 class SelectedVehicleNotifier extends StateNotifier<EvVehicle?> {
   static const _storageKey = 'selected_vehicle_id';
+  static const _customKey = 'selected_vehicle_custom';
 
   SelectedVehicleNotifier() : super(null) {
     _load();
@@ -104,23 +139,34 @@ class SelectedVehicleNotifier extends StateNotifier<EvVehicle?> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    // Try custom vehicle first
+    final customJson = prefs.getString(_customKey);
+    if (customJson != null) {
+      try {
+        state = EvVehicle.fromJson(jsonDecode(customJson) as Map<String, dynamic>);
+        return;
+      } catch (_) {}
+    }
     final id = prefs.getString(_storageKey);
     if (id != null) {
       try {
         state = evVehicleCatalog.firstWhere((v) => v.id == id);
-      } catch (_) {
-        // Vehicle not found in catalog
-      }
+      } catch (_) {}
     }
   }
 
   Future<void> select(EvVehicle? vehicle) async {
     state = vehicle;
     final prefs = await SharedPreferences.getInstance();
-    if (vehicle != null) {
-      await prefs.setString(_storageKey, vehicle.id);
-    } else {
+    if (vehicle == null) {
       await prefs.remove(_storageKey);
+      await prefs.remove(_customKey);
+    } else if (vehicle.isCustom) {
+      await prefs.remove(_storageKey);
+      await prefs.setString(_customKey, jsonEncode(vehicle.toJson()));
+    } else {
+      await prefs.remove(_customKey);
+      await prefs.setString(_storageKey, vehicle.id);
     }
   }
 }
