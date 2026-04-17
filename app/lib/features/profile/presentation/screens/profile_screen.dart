@@ -71,6 +71,13 @@ class ProfileScreen extends ConsumerWidget {
           ),
 
           _MenuSection(
+            title: 'Vertrag',
+            items: [
+              _MenuItem(icon: Icons.gavel, label: 'Vertrag & AGB', onTap: () => context.push('/profile/contract')),
+            ],
+          ),
+
+          _MenuSection(
             title: 'Abo',
             items: [
               _MenuItem(icon: Icons.card_membership, label: 'Abo verwalten', onTap: () => context.push('/profile/subscription')),

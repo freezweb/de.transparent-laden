@@ -4,7 +4,9 @@ namespace App\Controllers\Api;
 
 use App\Libraries\ChargingService;
 use App\Libraries\LiveCostService;
+use App\Libraries\EmailService;
 use App\Models\ChargingSessionModel;
+use App\Models\UserModel;
 
 class ChargingController extends ApiBaseController
 {
@@ -31,6 +33,16 @@ class ChargingController extends ApiBaseController
             return $this->failValidationErrors($this->validator->getErrors());
         }
 
+        // Check contract acceptance + withdrawal waiver
+        $userModel = model(UserModel::class);
+        $user = $userModel->find($this->userId);
+        if (empty($user['terms_accepted_at'])) {
+            return $this->fail('Bitte zuerst die AGB akzeptieren (Profil → Vertrag).', 422);
+        }
+        if (empty($user['withdrawal_waived_at'])) {
+            return $this->fail('Bitte zuerst den Widerrufsverzicht erklären (Profil → Vertrag).', 422);
+        }
+
         try {
             $session = $this->chargingService->startSession(
                 $this->userId,
@@ -48,6 +60,24 @@ class ChargingController extends ApiBaseController
     {
         try {
             $session = $this->chargingService->stopSession($this->userId, $sessionId);
+
+            // Send charging receipt email
+            try {
+                $userModel = model(UserModel::class);
+                $user = $userModel->find($this->userId);
+                if ($user) {
+                    $mailer = new EmailService();
+                    $mailer->sendChargingReceipt(
+                        $user['email'],
+                        $user['first_name'] ?? '',
+                        $session,
+                        $this->userId
+                    );
+                }
+            } catch (\Throwable $e) {
+                log_message('error', 'Charging receipt email failed: ' . $e->getMessage());
+            }
+
             return $this->respond(['session' => $session]);
         } catch (\RuntimeException $e) {
             return $this->fail($e->getMessage());

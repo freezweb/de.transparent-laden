@@ -17,6 +17,8 @@ class UserModel extends Model
         'email', 'password_hash', 'first_name', 'last_name',
         'phone', 'street', 'city', 'postal_code', 'country',
         'email_verified_at', 'status', 'stripe_customer_id',
+        'terms_accepted_at', 'terms_version',
+        'withdrawal_waived_at', 'withdrawal_waiver_ip',
     ];
 
     protected $validationRules = [

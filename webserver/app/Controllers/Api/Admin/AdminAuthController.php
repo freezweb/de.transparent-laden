@@ -28,7 +28,7 @@ class AdminAuthController extends ApiBaseController
         $rules = [
             'email'    => 'required|valid_email',
             'password' => 'required',
-            'totp'     => 'required|exact_length[6]',
+            'totp'     => 'permit_empty|exact_length[6]',
         ];
 
         if (! $this->validate($rules)) {
@@ -42,11 +42,32 @@ class AdminAuthController extends ApiBaseController
             return $this->failUnauthorized('Invalid credentials');
         }
 
-        if ($admin['status'] !== 'active') {
-            return $this->failForbidden('Account not active. Status: ' . $admin['status']);
+        if ($admin['status'] === 'blocked') {
+            return $this->failForbidden('Account is blocked');
         }
 
-        if (! $this->totp->verify($admin['totp_secret'], $data['totp'])) {
+        // Admin has no TOTP set up yet → redirect to setup
+        if (empty($admin['totp_secret_encrypted'])) {
+            return $this->respond([
+                'requires_totp_setup' => true,
+                'message'             => 'TOTP setup required before first login.',
+            ]);
+        }
+
+        // Admin has TOTP but status is still totp_pending → redirect to confirm
+        if ($admin['status'] === 'totp_pending') {
+            return $this->respond([
+                'requires_totp_setup' => true,
+                'message'             => 'TOTP confirmation pending.',
+            ]);
+        }
+
+        // TOTP code required for active accounts
+        if (empty($data['totp'])) {
+            return $this->failValidationErrors(['totp' => 'TOTP code is required']);
+        }
+
+        if (! $this->totp->verify($admin['totp_secret_encrypted'], $data['totp'])) {
             return $this->failUnauthorized('Invalid TOTP code');
         }
 
@@ -63,7 +84,7 @@ class AdminAuthController extends ApiBaseController
 
         return $this->respond([
             'access_token' => $token,
-            'admin'        => [
+            'user'         => [
                 'id'    => (int) $admin['id'],
                 'email' => $admin['email'],
                 'name'  => $admin['display_name'],
@@ -117,39 +138,47 @@ class AdminAuthController extends ApiBaseController
 
     public function setupTotp()
     {
-        $rules = [
-            'invitation_token' => 'required',
-            'password'         => 'required|min_length[8]',
-        ];
+        $data = $this->request->getJSON(true);
+        $admin = null;
 
-        if (! $this->validate($rules)) {
-            return $this->failValidationErrors($this->validator->getErrors());
-        }
-
-        $data  = $this->request->getJSON(true);
-        $admin = $this->adminModel->findByInvitationToken(hash('sha256', $data['invitation_token']));
-
-        if (! $admin) {
-            return $this->failNotFound('Invalid or expired invitation token');
-        }
-
-        if (strtotime($admin['invitation_expires_at']) < time()) {
-            return $this->fail('Invitation has expired', 410);
+        // Two paths: (A) via email+password or (B) via invitation_token+password
+        if (! empty($data['email']) && ! empty($data['password'])) {
+            // Path A: Existing admin without TOTP (first login flow)
+            $admin = $this->adminModel->findByEmail($data['email']);
+            if (! $admin || ! password_verify($data['password'], $admin['password_hash'])) {
+                return $this->failUnauthorized('Invalid credentials');
+            }
+        } elseif (! empty($data['invitation_token']) && ! empty($data['password'])) {
+            // Path B: Invited admin via token
+            $admin = $this->adminModel->findByInvitationToken(hash('sha256', $data['invitation_token']));
+            if (! $admin) {
+                return $this->failNotFound('Invalid or expired invitation token');
+            }
+            if (strtotime($admin['invitation_expires_at']) < time()) {
+                return $this->fail('Invitation has expired', 410);
+            }
+        } else {
+            return $this->failValidationErrors(['error' => 'Provide email+password or invitation_token+password']);
         }
 
         $totpSecret    = $this->totp->generateSecret();
         $recoveryCodes = $this->totp->generateRecoveryCodes();
 
-        $this->adminModel->update($admin['id'], [
-            'password_hash'              => password_hash($data['password'], PASSWORD_ARGON2ID),
+        $updateData = [
             'totp_secret_encrypted'      => $totpSecret,
             'recovery_codes_encrypted'   => json_encode($recoveryCodes),
             'status'                     => 'totp_pending',
             'invitation_token_hash'      => null,
             'invitation_expires_at'      => null,
-        ]);
+        ];
+        // Only set password if coming from invitation (Path B)
+        if (! empty($data['invitation_token'])) {
+            $updateData['password_hash'] = password_hash($data['password'], PASSWORD_ARGON2ID);
+        }
 
-        $provisioningUri = $this->totp->getProvisioningUri($admin['email'], $totpSecret, 'EinfachLaden Admin');
+        $this->adminModel->update($admin['id'], $updateData);
+
+        $provisioningUri = $this->totp->getProvisioningUri($totpSecret, $admin['email'], 'TransparentLaden Admin');
 
         return $this->respond([
             'totp_secret'      => $totpSecret,
@@ -180,10 +209,29 @@ class AdminAuthController extends ApiBaseController
             return $this->failUnauthorized('Invalid TOTP code');
         }
 
-        $this->adminModel->update($admin['id'], ['status' => 'active']);
+        $this->adminModel->update($admin['id'], [
+            'status'           => 'active',
+            'totp_verified_at' => date('Y-m-d H:i:s'),
+        ]);
+
+        $token = $this->jwt->generateAccessToken([
+            'sub'   => $admin['id'],
+            'email' => $admin['email'],
+            'role'  => 'admin',
+            'admin_role' => $admin['role'],
+        ]);
 
         $this->auditModel->log('admin_users', $admin['id'], 'totp_confirmed', 'admin', $admin['id'], []);
 
-        return $this->respond(['message' => 'TOTP confirmed. Account is now active.']);
+        return $this->respond([
+            'message'      => 'TOTP confirmed. Account is now active.',
+            'access_token' => $token,
+            'user'         => [
+                'id'    => (int) $admin['id'],
+                'email' => $admin['email'],
+                'name'  => $admin['display_name'],
+                'role'  => $admin['role'],
+            ],
+        ]);
     }
 }

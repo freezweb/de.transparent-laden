@@ -3,6 +3,7 @@
 namespace App\Controllers\Api;
 
 use App\Models\UserModel;
+use App\Libraries\EmailService;
 
 class UserController extends ApiBaseController
 {
@@ -73,6 +74,14 @@ class UserController extends ApiBaseController
         $this->userModel->update($this->userId, [
             'password_hash' => password_hash($data['new_password'], PASSWORD_ARGON2ID),
         ]);
+
+        // Notify user about password change
+        try {
+            $mailer = new EmailService();
+            $mailer->sendPasswordChanged($user['email'], $user['first_name'] ?? '', $this->userId);
+        } catch (\Throwable $e) {
+            log_message('error', 'Password change email failed: ' . $e->getMessage());
+        }
 
         return $this->respond(['message' => 'Password changed']);
     }

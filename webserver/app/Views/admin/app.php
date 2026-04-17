@@ -51,7 +51,8 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700">TOTP-Code (6-stellig)</label>
-                    <input type="text" x-model="authForm.totp_code" required pattern="[0-9]{6}" maxlength="6" placeholder="000000" class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-center text-2xl tracking-widest font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                    <input type="text" x-model="authForm.totp" pattern="[0-9]{6}" maxlength="6" placeholder="000000" class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-center text-2xl tracking-widest font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                    <p class="text-xs text-gray-400 mt-1">Leer lassen bei Erstanmeldung ohne TOTP</p>
                 </div>
                 <button type="submit" :disabled="authLoading" class="w-full bg-gray-900 text-white py-2 px-4 rounded-lg hover:bg-gray-800 disabled:opacity-50 font-medium">
                     <span x-show="!authLoading">Anmelden</span><span x-show="authLoading">…</span>
@@ -561,7 +562,7 @@ function adminApp() {
         // Auth
         token: localStorage.getItem('admin_token') || '',
         authStep: 'login',
-        authForm: { email:'', password:'', totp_code:'' },
+        authForm: { email:'', password:'', totp:'' },
         authError: '',
         authLoading: false,
         totpSetup: {},
@@ -660,14 +661,19 @@ function adminApp() {
         async confirmTotp() {
             this.authError = '';
             try {
-                const r = await this.api('POST', '/auth/confirm-totp', { email: this.authForm.email, totp_code: this.totpConfirmCode }, true);
-                this.setAdminAuth(r.data || r);
-                await this.loadDashboard();
+                const r = await this.api('POST', '/auth/confirm-totp', { email: this.authForm.email, totp: this.totpConfirmCode }, true);
+                if (r.access_token || r.data?.access_token) {
+                    this.setAdminAuth(r.data || r);
+                    await this.loadDashboard();
+                } else {
+                    this.authError = r.message || 'TOTP bestätigt, bitte erneut anmelden.';
+                    this.authStep = 'login';
+                }
             } catch(e) { this.authError = e.message; }
         },
         setAdminAuth(data) {
             this.token = data.token || data.access_token || '';
-            this.adminUser = data.user || data;
+            this.adminUser = data.user || data.admin || data;
             localStorage.setItem('admin_token', this.token);
             localStorage.setItem('admin_user', JSON.stringify(this.adminUser));
             this.authStep = 'login';

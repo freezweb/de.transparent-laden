@@ -93,6 +93,14 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], static function
         $routes->get('(:num)/pdf', 'InvoiceController::downloadPdf/$1');
     });
 
+    // ── Contract & Withdrawal ──
+    $routes->group('contract', ['filter' => 'jwt'], static function ($routes) {
+        $routes->get('status', 'ContractController::status');
+        $routes->get('terms', 'ContractController::terms');
+        $routes->post('accept', 'ContractController::accept');
+        $routes->post('waive-withdrawal', 'ContractController::waiveWithdrawal');
+    });
+
     // ── Payment Methods ──
     $routes->group('payment-methods', ['filter' => 'jwt'], static function ($routes) {
         $routes->get('/', 'PaymentMethodController::index');

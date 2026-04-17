@@ -17,6 +17,7 @@ import 'package:einfach_laden/features/profile/presentation/screens/subscription
 import 'package:einfach_laden/features/profile/presentation/screens/notification_settings_screen.dart';
 import 'package:einfach_laden/features/vehicle/presentation/screens/vehicle_config_screen.dart';
 import 'package:einfach_laden/features/charge_point/presentation/screens/external_station_info_screen.dart';
+import 'package:einfach_laden/features/profile/presentation/screens/contract_screen.dart';
 import 'package:einfach_laden/features/auth/providers/auth_provider.dart';
 import 'package:einfach_laden/core/widgets/app_shell.dart';
 
@@ -111,6 +112,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile/vehicle',
         builder: (context, state) => const VehicleConfigScreen(),
+      ),
+      GoRoute(
+        path: '/profile/contract',
+        builder: (context, state) => const ContractScreen(),
       ),
       GoRoute(
         path: '/station-info/:id',

@@ -34,6 +34,14 @@ class AuthService
 
         $this->auditLog->log('user', $userId, 'register', 'user', $userId);
 
+        // Send welcome email
+        try {
+            $mailer = new EmailService();
+            $mailer->sendWelcome($data['email'], $data['first_name'] ?? '', (int) $userId);
+        } catch (\Throwable $e) {
+            log_message('error', 'Welcome email failed: ' . $e->getMessage());
+        }
+
         return $this->issueTokens($userId, $data['email']);
     }
 
