@@ -28,4 +28,22 @@ class ConnectorModel extends Model
                      ->where('status', 'available')
                      ->findAll();
     }
+
+    /**
+     * Get connectors for multiple charge points in one query, grouped by charge_point_id.
+     */
+    public function getGroupedByChargePoints(array $chargePointIds): array
+    {
+        if (empty($chargePointIds)) return [];
+
+        $connectors = $this->select('id, charge_point_id, connector_type, power_kw')
+                           ->whereIn('charge_point_id', $chargePointIds)
+                           ->findAll();
+
+        $grouped = [];
+        foreach ($connectors as $c) {
+            $grouped[(int)$c['charge_point_id']][] = $c;
+        }
+        return $grouped;
+    }
 }

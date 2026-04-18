@@ -10,6 +10,13 @@ class ChargePointRepository {
   final Dio _dio;
   ChargePointRepository(this._dio);
 
+  /// Fetch ALL local station locations (static data only, no status).
+  /// Ultra-fast preload endpoint for map markers.
+  Future<List<Map<String, dynamic>>> getAllLocations() async {
+    final response = await _dio.get('/charge-points/locations');
+    return List<Map<String, dynamic>>.from(response.data['charge_points'] ?? []);
+  }
+
   Future<List<Map<String, dynamic>>> getNearby({
     required double lat,
     required double lng,

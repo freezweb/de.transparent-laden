@@ -24,6 +24,64 @@ class ChargePointController extends ApiBaseController
     }
 
     /**
+     * GET /charge-points/locations
+     * Returns ALL active local charge points with static data only.
+     * Ultra-fast: single DB query + batch connector summary. No status, no Overpass.
+     * Designed for preloading all markers on app start.
+     */
+    public function locations()
+    {
+        $cacheKey = 'charge_point_locations';
+        $cached = cache($cacheKey);
+        if ($cached !== null) {
+            return $this->respond($cached);
+        }
+
+        $chargePoints = $this->chargePointModel->getAllActive();
+        $cpIds = array_column($chargePoints, 'id');
+
+        // Batch-load connector summaries in ONE query
+        $grouped = $this->connectorModel->getGroupedByChargePoints(array_map('intval', $cpIds));
+
+        $result = [];
+        foreach ($chargePoints as $cp) {
+            $connectors = $grouped[(int)$cp['id']] ?? [];
+            $maxPwr = 0;
+            $types = [];
+            foreach ($connectors as $c) {
+                $pwr = (float)($c['power_kw'] ?? 0);
+                if ($pwr > $maxPwr) $maxPwr = $pwr;
+                if (!empty($c['connector_type'])) {
+                    $types[] = $c['connector_type'];
+                }
+            }
+
+            $result[] = [
+                'id'              => (int)$cp['id'],
+                'name'            => $cp['name'],
+                'latitude'        => $cp['latitude'],
+                'longitude'       => $cp['longitude'],
+                'address'         => $cp['address'],
+                'city'            => $cp['city'],
+                'postal_code'     => $cp['postal_code'],
+                'operator_name'   => $cp['operator_name'],
+                'is_startable'    => (bool)($cp['is_startable'] ?? false),
+                'max_power_kw'    => $maxPwr,
+                'connector_count' => count($connectors),
+                'connector_types' => array_values(array_unique($types)),
+                'source'          => 'local',
+            ];
+        }
+
+        $response = ['charge_points' => $result, 'count' => count($result)];
+
+        // Cache for 5 minutes server-side
+        cache()->save($cacheKey, $response, 300);
+
+        return $this->respond($response);
+    }
+
+    /**
      * GET /charge-points/nearby?lat_min=...&lng_min=...&lat_max=...&lng_max=...
      * Also supports legacy ?lat=...&lng=...&radius=...
      * Returns local DB + Overpass (OSM) stations merged.

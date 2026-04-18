@@ -182,6 +182,70 @@ class StationCacheService {
     await prefs.remove(_timestampKey);
   }
 
+  /// Preload station locations into static cache.
+  /// Only stores static data (coords, name, address) — no status.
+  /// Stations without existing dynamic data get a placeholder.
+  void preloadLocations(List<Map<String, dynamic>> stations) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final cp in stations) {
+      final key = _stationKey(cp);
+
+      // Static data — overwrite with fresh preload data
+      _staticCache![key] = {
+        'id': cp['id'],
+        'source': cp['source'] ?? 'local',
+        'osm_id': cp['osm_id'],
+        'name': cp['name'],
+        'latitude': cp['latitude'],
+        'longitude': cp['longitude'],
+        'address': cp['address'],
+        'city': cp['city'],
+        'postal_code': cp['postal_code'],
+        'operator_name': cp['operator_name'],
+        'max_power_kw': cp['max_power_kw'],
+        'connector_count': cp['connector_count'],
+        'connector_types': cp['connector_types'],
+      };
+
+      // Only set dynamic placeholder if not already cached
+      _dynamicCache![key] ??= {
+        'is_startable': cp['is_startable'] ?? false,
+        'status_known': false,
+        'total_connectors': cp['connector_count'] ?? 0,
+        'available_connectors': 0,
+        'last_status_refresh': 0, // marks as stale → will be refreshed
+      };
+
+      _timestamps![key] ??= now;
+    }
+  }
+
+  /// Check if preloaded locations exist in cache.
+  bool get hasPreloadedLocations => (_staticCache?.length ?? 0) > 0;
+
+  /// Get IDs of local stations within given bounds that need status refresh.
+  List<int> getStaleLocalIdsInBounds(
+    double latMin, double lngMin, double latMax, double lngMax,
+  ) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stale = <int>[];
+    for (final entry in (_staticCache ?? {}).entries) {
+      if (!entry.key.startsWith('local_')) continue;
+      final lat = double.tryParse(entry.value['latitude']?.toString() ?? '');
+      final lng = double.tryParse(entry.value['longitude']?.toString() ?? '');
+      if (lat == null || lng == null) continue;
+      if (lat < latMin || lat > latMax || lng < lngMin || lng > lngMax) continue;
+
+      final dynamic = _dynamicCache?[entry.key];
+      final lastRefresh = (dynamic?['last_status_refresh'] as int?) ?? 0;
+      if (now - lastRefresh > statusRefreshInterval.inMilliseconds) {
+        final id = int.tryParse(entry.key.replaceFirst('local_', ''));
+        if (id != null) stale.add(id);
+      }
+    }
+    return stale;
+  }
+
   String _stationKey(Map<String, dynamic> cp) {
     if (cp['source'] == 'osm') return 'osm_${cp['osm_id']}';
     return 'local_${cp['id']}';

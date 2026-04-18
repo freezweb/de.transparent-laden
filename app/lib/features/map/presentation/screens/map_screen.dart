@@ -44,7 +44,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Map<String, Marker> _markerCache = {};
   LatLngBounds? _lastLoadedBounds;
+  LatLngBounds? _lastOsmLoadedBounds;
   bool _loading = false;
+  bool _preloaded = false;
 
   bool get _hasActiveFilters =>
       _minPowerKw != null || _maxPowerKw != null || _connectorType != null ||
@@ -65,7 +67,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Future<void> _initCache() async {
     await _cache.init();
+    // Preload ALL local station locations for instant markers
+    if (!_cache.hasPreloadedLocations) {
+      await _preloadAllLocations();
+    } else {
+      _preloaded = true;
+      await _rebuildMarkers();
+    }
     if (mounted) setState(() {});
+  }
+
+  /// Preload all local station locations from lightweight endpoint.
+  /// Gives instant markers without status data.
+  Future<void> _preloadAllLocations() async {
+    try {
+      final repo = ref.read(chargePointRepositoryProvider);
+      final locations = await repo.getAllLocations();
+      _cache.preloadLocations(locations);
+      _preloaded = true;
+      await _rebuildMarkers();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Will fall back to old bounding-box loading on camera idle
+    }
   }
 
   @override
@@ -76,9 +100,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     super.dispose();
   }
 
-  /// Refresh only dynamic status for stale local stations.
+  /// Refresh only dynamic status for stale local stations in visible area.
   Future<void> _refreshStatus() async {
-    final staleIds = _cache.getStaleLocalStationIds();
+    final controller = _mapController;
+    if (controller == null) return;
+
+    List<int> staleIds;
+    try {
+      final bounds = await controller.getVisibleRegion();
+      staleIds = _cache.getStaleLocalIdsInBounds(
+        bounds.southwest.latitude,
+        bounds.southwest.longitude,
+        bounds.northeast.latitude,
+        bounds.northeast.longitude,
+      );
+    } catch (_) {
+      // Fallback: refresh all stale
+      staleIds = _cache.getStaleLocalStationIds();
+    }
     if (staleIds.isEmpty) return;
 
     try {
@@ -102,20 +141,47 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     try {
       final repo = ref.read(chargePointRepositoryProvider);
-      final data = await repo.getByBoundingBox(
-        latMin: bounds.southwest.latitude,
-        lngMin: bounds.southwest.longitude,
-        latMax: bounds.northeast.latitude,
-        lngMax: bounds.northeast.longitude,
-        minPowerKw: _minPowerKw,
-        maxPowerKw: _maxPowerKw,
-        connectorType: _connectorType,
-        currentCategory: _currentCategory,
-        onlyStartable: _onlyStartable,
-      );
 
-      // Merge into persistent cache
-      _cache.mergeStations(data);
+      // 1) Refresh status for visible local stations (fast, small payload)
+      final staleIds = _cache.getStaleLocalIdsInBounds(
+        bounds.southwest.latitude,
+        bounds.southwest.longitude,
+        bounds.northeast.latitude,
+        bounds.northeast.longitude,
+      );
+      if (staleIds.isNotEmpty) {
+        for (var i = 0; i < staleIds.length; i += 100) {
+          final batch = staleIds.sublist(i, (i + 100).clamp(0, staleIds.length));
+          final statusMap = await repo.getStatus(batch);
+          _cache.updateStatus(statusMap);
+        }
+      }
+
+      // 2) Load OSM/Overpass external stations only for new areas
+      //    (Skip if filter is only_startable since OSM stations aren't startable)
+      if (_onlyStartable != true && _osmBoundsNeedLoad(bounds)) {
+        try {
+          final data = await repo.getByBoundingBox(
+            latMin: bounds.southwest.latitude,
+            lngMin: bounds.southwest.longitude,
+            latMax: bounds.northeast.latitude,
+            lngMax: bounds.northeast.longitude,
+            minPowerKw: _minPowerKw,
+            maxPowerKw: _maxPowerKw,
+            connectorType: _connectorType,
+            currentCategory: _currentCategory,
+          );
+          // Only merge OSM stations (local ones already preloaded)
+          final osmOnly = data.where((cp) => cp['source'] == 'osm').toList();
+          if (osmOnly.isNotEmpty) {
+            _cache.mergeStations(osmOnly);
+          }
+          _lastOsmLoadedBounds = bounds;
+        } catch (_) {
+          // OSM load failed — still show local stations
+        }
+      }
+
       await _rebuildMarkers();
 
       if (mounted) {
@@ -127,6 +193,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  bool _osmBoundsNeedLoad(LatLngBounds newBounds) {
+    if (_lastOsmLoadedBounds == null) return true;
+    final old = _lastOsmLoadedBounds!;
+    return newBounds.southwest.latitude < old.southwest.latitude - 0.01 ||
+        newBounds.southwest.longitude < old.southwest.longitude - 0.01 ||
+        newBounds.northeast.latitude > old.northeast.latitude + 0.01 ||
+        newBounds.northeast.longitude > old.northeast.longitude + 0.01;
   }
 
   Future<void> _rebuildMarkers() async {
@@ -192,8 +267,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final controller = _mapController;
     if (controller == null) return;
     final bounds = await controller.getVisibleRegion();
-    if (_lastLoadedBounds == null || _boundsNeedReload(bounds)) {
-      _loadStationsForBounds(bounds);
+
+    if (_preloaded && !_hasActiveFilters) {
+      // Local stations already preloaded — just refresh visible status + OSM
+      if (_lastLoadedBounds == null || _boundsNeedReload(bounds)) {
+        _loadStationsForBounds(bounds);
+      } else {
+        // Small pan: just rebuild markers from cache (instant)
+        await _rebuildMarkers();
+        if (mounted) setState(() {});
+      }
+    } else {
+      // Fallback: load everything (filters active or no preload)
+      if (_lastLoadedBounds == null || _boundsNeedReload(bounds)) {
+        _loadStationsForBounds(bounds);
+      }
     }
   }
 
@@ -209,6 +297,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _clearAndReload() {
     _markerCache.clear();
     _lastLoadedBounds = null;
+    _lastOsmLoadedBounds = null;
     _onCameraIdle();
   }
 
