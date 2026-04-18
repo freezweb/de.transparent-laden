@@ -44,13 +44,23 @@ class MarkerGenerator {
   static Future<BitmapDescriptor> getMarker({
     required double maxPowerKw,
     required MarkerColor color,
+    int? available,
+    int? total,
   }) async {
-    final kwLabel = maxPowerKw >= 100 ? '${maxPowerKw.toInt()}' : '${maxPowerKw.toInt()}';
-    final key = '${color.name}_$kwLabel';
+    final kwLabel = '${maxPowerKw.toInt()}';
+    final hasAvailability = available != null && total != null && total > 0;
+    final key = hasAvailability
+        ? '${color.name}_${kwLabel}_${available}_$total'
+        : '${color.name}_$kwLabel';
 
     if (_cache.containsKey(key)) return _cache[key]!;
 
-    final descriptor = await _paintMarker(kwLabel: kwLabel, color: color);
+    final descriptor = await _paintMarker(
+      kwLabel: kwLabel,
+      color: color,
+      available: hasAvailability ? available : null,
+      total: hasAvailability ? total : null,
+    );
     _cache[key] = descriptor;
     return descriptor;
   }
@@ -58,6 +68,8 @@ class MarkerGenerator {
   static Future<BitmapDescriptor> _paintMarker({
     required String kwLabel,
     required MarkerColor color,
+    int? available,
+    int? total,
   }) async {
     const double circleSize = 96;
     const double pinHeight = 120;
@@ -114,34 +126,67 @@ class MarkerGenerator {
     // Small bolt icon at top
     _drawSmallBolt(canvas, center.dx, center.dy - 16, 8, Paint()..color = Colors.white);
 
-    // kW text
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: kwLabel,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: kwLabel.length > 2 ? 16 : 20,
-          fontWeight: FontWeight.w900,
-          shadows: [Shadow(color: Colors.black.withAlpha(80), blurRadius: 2)],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    textPainter.paint(canvas, Offset(center.dx - textPainter.width / 2, center.dy - 2));
+    final bool hasAvailability = available != null && total != null && total > 0;
 
-    // "kW" small label below number
-    final kwPainter = TextPainter(
-      text: TextSpan(
-        text: 'kW',
-        style: TextStyle(
-          color: Colors.white.withAlpha(200),
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
+    if (hasAvailability) {
+      // Compact layout: "22kW" + "3/8" below
+      final kwCombined = TextPainter(
+        text: TextSpan(
+          text: '${kwLabel}kW',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: kwLabel.length > 2 ? 12 : 14,
+            fontWeight: FontWeight.w900,
+            shadows: [Shadow(color: Colors.black.withAlpha(80), blurRadius: 2)],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    kwPainter.paint(canvas, Offset(center.dx - kwPainter.width / 2, center.dy + 14));
+        textDirection: TextDirection.ltr,
+      )..layout();
+      kwCombined.paint(canvas, Offset(center.dx - kwCombined.width / 2, center.dy - 6));
+
+      // Availability "3/8"
+      final availPainter = TextPainter(
+        text: TextSpan(
+          text: '$available/$total',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            shadows: [Shadow(color: Colors.black.withAlpha(80), blurRadius: 2)],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      availPainter.paint(canvas, Offset(center.dx - availPainter.width / 2, center.dy + 10));
+    } else {
+      // Original layout: number + "kW"
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: kwLabel,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: kwLabel.length > 2 ? 16 : 20,
+            fontWeight: FontWeight.w900,
+            shadows: [Shadow(color: Colors.black.withAlpha(80), blurRadius: 2)],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(canvas, Offset(center.dx - textPainter.width / 2, center.dy - 2));
+
+      final kwPainter = TextPainter(
+        text: TextSpan(
+          text: 'kW',
+          style: TextStyle(
+            color: Colors.white.withAlpha(200),
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      kwPainter.paint(canvas, Offset(center.dx - kwPainter.width / 2, center.dy + 14));
+    }
 
     final image = await recorder.endRecording().toImage(circleSize.toInt(), pinHeight.toInt());
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);

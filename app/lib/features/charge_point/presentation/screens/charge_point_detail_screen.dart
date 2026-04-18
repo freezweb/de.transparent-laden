@@ -95,10 +95,11 @@ class ChargePointDetailScreen extends ConsumerWidget {
               const SizedBox(height: 8),
 
               // Connectors
-              ...connectors.map((conn) => _ConnectorCard(
-                    connector: conn,
+              ...connectors.asMap().entries.map((entry) => _ConnectorCard(
+                    index: entry.key + 1,
+                    connector: entry.value,
                     isStartable: isStartable,
-                    onStartCharging: () => _startCharging(context, ref, int.parse(conn['id'].toString())),
+                    onStartCharging: () => _startCharging(context, ref, int.parse(entry.value['id'].toString())),
                   )),
 
               // Reviews section
@@ -321,17 +322,19 @@ class _StartabilityBadge extends StatelessWidget {
 }
 
 class _ConnectorCard extends StatelessWidget {
+  final int index;
   final Map<String, dynamic> connector;
   final bool isStartable;
   final VoidCallback onStartCharging;
 
-  const _ConnectorCard({required this.connector, required this.isStartable, required this.onStartCharging});
+  const _ConnectorCard({required this.index, required this.connector, required this.isStartable, required this.onStartCharging});
 
   @override
   Widget build(BuildContext context) {
     final type = connector['connector_type'] ?? 'Unknown';
     final power = connector['power_kw'] ?? 0;
     final status = connector['status'] ?? 'unknown';
+    final connectorId = connector['id'];
     final isAvailable = status == 'available';
 
     return Card(
@@ -342,18 +345,29 @@ class _ConnectorCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.ev_station,
-                  color: isAvailable ? Colors.green : Colors.grey,
+                // Numbered circle
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: _statusColor(status).withAlpha(30),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _statusColor(status), width: 2),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('#$index', style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 12, color: _statusColor(status),
+                  )),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(type, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                      Text('$power kW • ${_statusText(status)}',
-                          style: Theme.of(context).textTheme.bodySmall),
+                      Text('$type • $power kW', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(
+                        connectorId != null ? 'ID $connectorId • ${_statusText(status)}' : _statusText(status),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: _statusColor(status)),
+                      ),
                     ],
                   ),
                 ),
@@ -393,6 +407,19 @@ class _ConnectorCard extends StatelessWidget {
         return 'Unbekannt';
     }
   }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'available':
+        return Colors.green;
+      case 'occupied':
+        return Colors.orange;
+      case 'out_of_service':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
 }
 
 class _StatusBadge extends StatelessWidget {
@@ -401,25 +428,23 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color color;
-    switch (status) {
-      case 'available':
-        color = Colors.green;
-      case 'occupied':
-        color = Colors.orange;
-      default:
-        color = Colors.grey;
-    }
+    final (Color color, String label) = switch (status) {
+      'available' => (Colors.green, 'FREI'),
+      'occupied' => (Colors.orange, 'BESETZT'),
+      'out_of_service' => (Colors.red, 'STÖRUNG'),
+      _ => (Colors.grey, 'UNBEKANNT'),
+    };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color.withAlpha(38),
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withAlpha(80)),
       ),
       child: Text(
-        status.toUpperCase(),
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+        label,
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
       ),
     );
   }

@@ -12,8 +12,11 @@ class ChargePointRepository {
 
   /// Fetch ALL local station locations (static data only, no status).
   /// Ultra-fast preload endpoint for map markers.
-  Future<List<Map<String, dynamic>>> getAllLocations() async {
-    final response = await _dio.get('/charge-points/locations');
+  /// Pass [updatedSince] ISO timestamp for delta sync.
+  Future<List<Map<String, dynamic>>> getAllLocations({String? updatedSince}) async {
+    final params = <String, dynamic>{};
+    if (updatedSince != null) params['updated_since'] = updatedSince;
+    final response = await _dio.get('/charge-points/locations', queryParameters: params);
     return List<Map<String, dynamic>>.from(response.data['charge_points'] ?? []);
   }
 

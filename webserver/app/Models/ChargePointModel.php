@@ -63,4 +63,17 @@ class ChargePointModel extends Model
                      ->where('longitude IS NOT NULL')
                      ->findAll();
     }
+
+    /**
+     * Get charge points updated since given timestamp (for delta sync).
+     */
+    public function getUpdatedSince(string $since): array
+    {
+        return $this->select('id, name, address, city, postal_code, latitude, longitude, operator_name, is_startable')
+                     ->where('is_active', 1)
+                     ->where('latitude IS NOT NULL')
+                     ->where('longitude IS NOT NULL')
+                     ->where('updated_at >=', $since)
+                     ->findAll();
+    }
 }

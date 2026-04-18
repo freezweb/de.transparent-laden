@@ -78,12 +78,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   /// Preload all local station locations from lightweight endpoint.
-  /// Gives instant markers without status data.
+  /// Uses delta sync when possible.
   Future<void> _preloadAllLocations() async {
     try {
       final repo = ref.read(chargePointRepositoryProvider);
-      final locations = await repo.getAllLocations();
-      _cache.preloadLocations(locations);
+      if (!_cache.needsFullSync) {
+        // Delta sync — only fetch updates since last sync
+        final locations = await repo.getAllLocations(
+          updatedSince: _cache.lastFullSync?.toIso8601String(),
+        );
+        if (locations.isNotEmpty) {
+          await _cache.preloadLocations(locations);
+        }
+      } else {
+        // Full sync
+        final locations = await repo.getAllLocations();
+        await _cache.preloadLocations(locations);
+      }
       _preloaded = true;
       await _rebuildMarkers();
       if (mounted) setState(() {});
@@ -108,7 +119,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     List<int> staleIds;
     try {
       final bounds = await controller.getVisibleRegion();
-      staleIds = _cache.getStaleLocalIdsInBounds(
+      staleIds = await _cache.getStaleLocalIdsInBounds(
         bounds.southwest.latitude,
         bounds.southwest.longitude,
         bounds.northeast.latitude,
@@ -116,7 +127,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
     } catch (_) {
       // Fallback: refresh all stale
-      staleIds = _cache.getStaleLocalStationIds();
+      staleIds = await _cache.getStaleLocalStationIds();
     }
     if (staleIds.isEmpty) return;
 
@@ -126,7 +137,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       for (var i = 0; i < staleIds.length; i += 100) {
         final batch = staleIds.sublist(i, (i + 100).clamp(0, staleIds.length));
         final statusMap = await repo.getStatus(batch);
-        _cache.updateStatus(statusMap);
+        await _cache.updateStatus(statusMap);
       }
       await _rebuildMarkers();
       if (mounted) setState(() {});
@@ -143,7 +154,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final repo = ref.read(chargePointRepositoryProvider);
 
       // 1) Refresh status for visible local stations (fast, small payload)
-      final staleIds = _cache.getStaleLocalIdsInBounds(
+      final staleIds = await _cache.getStaleLocalIdsInBounds(
         bounds.southwest.latitude,
         bounds.southwest.longitude,
         bounds.northeast.latitude,
@@ -153,7 +164,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         for (var i = 0; i < staleIds.length; i += 100) {
           final batch = staleIds.sublist(i, (i + 100).clamp(0, staleIds.length));
           final statusMap = await repo.getStatus(batch);
-          _cache.updateStatus(statusMap);
+          await _cache.updateStatus(statusMap);
         }
       }
 
@@ -174,7 +185,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           // Only merge OSM stations (local ones already preloaded)
           final osmOnly = data.where((cp) => cp['source'] == 'osm').toList();
           if (osmOnly.isNotEmpty) {
-            _cache.mergeStations(osmOnly);
+            await _cache.mergeStations(osmOnly);
           }
           _lastOsmLoadedBounds = bounds;
         } catch (_) {
@@ -205,7 +216,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _rebuildMarkers() async {
-    final allStations = _cache.getAllStations();
+    final allStations = await _cache.getAllStations();
     final newMarkers = <String, Marker>{};
 
     for (final entry in allStations.entries) {
@@ -240,6 +251,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final icon = await MarkerGenerator.getMarker(
         maxPowerKw: maxPower,
         color: color,
+        available: statusKnown && total > 0 ? available : null,
+        total: statusKnown && total > 0 ? total : null,
       );
 
       newMarkers[key] = Marker(

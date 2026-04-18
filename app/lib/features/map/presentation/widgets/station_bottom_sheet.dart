@@ -83,12 +83,19 @@ class StationBottomSheet extends ConsumerWidget {
                     _InfoPill(icon: Icons.bolt, label: '${maxPower.toInt()} kW', color: _powerColor(maxPower)),
                     const SizedBox(width: 8),
                     _InfoPill(icon: Icons.electrical_services, label: connectorTypes),
-                    if (!isExternal && total > 0) ...[
+                    if (!isExternal && statusKnown && total > 0) ...[
                       const SizedBox(width: 8),
                       _InfoPill(
                         icon: available > 0 ? Icons.check_circle_outline : Icons.block,
                         label: '$available / $total frei',
                         color: available > 0 ? Colors.green : Colors.red,
+                      ),
+                    ] else if (!isExternal && !statusKnown && total > 0) ...[
+                      const SizedBox(width: 8),
+                      _InfoPill(
+                        icon: Icons.help_outline,
+                        label: '$total Anschlüsse',
+                        color: Colors.grey,
                       ),
                     ],
                   ],

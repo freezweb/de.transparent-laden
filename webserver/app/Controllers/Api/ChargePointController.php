@@ -28,12 +28,71 @@ class ChargePointController extends ApiBaseController
      * Returns ALL active local charge points with static data only.
      * Ultra-fast: single DB query + batch connector summary. No status, no Overpass.
      * Designed for preloading all markers on app start.
+     * Supports delta sync via ?updated_since=ISO_TIMESTAMP.
      */
     public function locations()
     {
+        $updatedSince = $this->request->getGet('updated_since');
+
+        // Delta sync: only return stations updated since given timestamp
+        if ($updatedSince !== null && $updatedSince !== '') {
+            // Validate & sanitize the timestamp
+            $ts = strtotime($updatedSince);
+            if ($ts === false) {
+                return $this->failValidationErrors(['updated_since' => 'Invalid timestamp format']);
+            }
+            $since = date('Y-m-d H:i:s', $ts);
+
+            $chargePoints = $this->chargePointModel->getUpdatedSince($since);
+            $cpIds = array_column($chargePoints, 'id');
+
+            $grouped = !empty($cpIds)
+                ? $this->connectorModel->getGroupedByChargePoints(array_map('intval', $cpIds))
+                : [];
+
+            $result = [];
+            foreach ($chargePoints as $cp) {
+                $connectors = $grouped[(int)$cp['id']] ?? [];
+                $maxPwr = 0;
+                $types = [];
+                foreach ($connectors as $c) {
+                    $pwr = (float)($c['power_kw'] ?? 0);
+                    if ($pwr > $maxPwr) $maxPwr = $pwr;
+                    if (!empty($c['connector_type'])) {
+                        $types[] = $c['connector_type'];
+                    }
+                }
+
+                $result[] = [
+                    'id'              => (int)$cp['id'],
+                    'name'            => $cp['name'],
+                    'latitude'        => $cp['latitude'],
+                    'longitude'       => $cp['longitude'],
+                    'address'         => $cp['address'],
+                    'city'            => $cp['city'],
+                    'postal_code'     => $cp['postal_code'],
+                    'operator_name'   => $cp['operator_name'],
+                    'is_startable'    => (bool)($cp['is_startable'] ?? false),
+                    'max_power_kw'    => $maxPwr,
+                    'connector_count' => count($connectors),
+                    'connector_types' => array_values(array_unique($types)),
+                    'source'          => 'local',
+                ];
+            }
+
+            return $this->respond([
+                'charge_points'  => $result,
+                'count'          => count($result),
+                'sync_timestamp' => date('c'), // ISO 8601 for client to store
+                'is_delta'       => true,
+            ]);
+        }
+
+        // Full sync with server-side cache
         $cacheKey = 'charge_point_locations';
         $cached = cache($cacheKey);
         if ($cached !== null) {
+            $cached['sync_timestamp'] = date('c');
             return $this->respond($cached);
         }
 
@@ -73,7 +132,11 @@ class ChargePointController extends ApiBaseController
             ];
         }
 
-        $response = ['charge_points' => $result, 'count' => count($result)];
+        $response = [
+            'charge_points'  => $result,
+            'count'          => count($result),
+            'sync_timestamp' => date('c'),
+        ];
 
         // Cache for 5 minutes server-side
         cache()->save($cacheKey, $response, 300);
